@@ -5,6 +5,8 @@ CREATE TABLE IF NOT EXISTS paymentRequest(
     requested_at TIMESTAMP NOT NULL
 );
 
+
+/*
 SELECT
   processor,
   COUNT(*) AS totalRequests,
@@ -14,3 +16,4 @@ WHERE requested_at BETWEEN ? AND ?
 GROUP BY processor;
 
 CREATE INDEX idx_requested_at_processor ON payment_request (requested_at, processor);
+*/
