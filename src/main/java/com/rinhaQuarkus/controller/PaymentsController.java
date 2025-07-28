@@ -10,6 +10,7 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
 import java.time.Instant;
+import java.util.concurrent.CompletableFuture;
 
 @Path("/")
 @Produces(MediaType.APPLICATION_JSON)
@@ -25,8 +26,10 @@ public class PaymentsController {
     @POST
     @Path("/payments")
     public Response createPayment(PaymentRequest pay){
-        cache.decideWich(pay);
-        return Response.ok().build();
+        //cache.decideWich(pay);
+        CompletableFuture.runAsync(() -> cache.decideWich(pay));
+        return Response.accepted().build();
+       // return Response.ok().build();
     }
 
     @GET
@@ -39,7 +42,6 @@ public class PaymentsController {
     @GET
     @Path("/payments-tt")
     public Response getPaymentSumary(){
-
-        return Response.ok("oiiiii").build();
+        return Response.ok("oiiiiissss2").build();
     }
 }

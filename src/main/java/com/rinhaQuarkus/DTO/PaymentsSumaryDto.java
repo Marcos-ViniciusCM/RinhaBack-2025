@@ -1,4 +1,6 @@
 package com.rinhaQuarkus.DTO;
 
-public record PaymentsSumaryDto(DefaultSumaryDto defaults , FallbackSumaryDto fallback ) {
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+public record PaymentsSumaryDto(@JsonProperty("default") DefaultSumaryDto _default, FallbackSumaryDto fallback ) {
 }

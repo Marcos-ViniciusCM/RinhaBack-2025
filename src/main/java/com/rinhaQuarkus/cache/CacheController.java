@@ -2,6 +2,7 @@ package com.rinhaQuarkus.cache;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rinhaQuarkus.DTO.ServiceHealthDto;
+import com.rinhaQuarkus.enums.Processor;
 import com.rinhaQuarkus.jdbc.api.DataService;
 import com.rinhaQuarkus.model.PaymentRequest;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -44,6 +45,8 @@ public class CacheController {
     @Inject
     DataService service;
 
+
+
     private ServiceHealthDto checkCache(String key){
         CacheHealth cached = cache.get(key);
         if(cached != null && !cached.isExpired()){
@@ -62,7 +65,7 @@ public class CacheController {
                 int status = response.getStatusLine().getStatusCode();
 
                 if(status < 200 || status > 299){
-                    return new ServiceHealthDto(true , 9999 );
+                    throw new RuntimeException("Service health check failed for processor: " + processor);
                 }
 
                 String json = EntityUtils.toString(response.getEntity());
@@ -77,16 +80,24 @@ public class CacheController {
     public void decideWich(PaymentRequest pay){
         ServiceHealthDto health = checkCache("default");
         ServiceHealthDto healthFallback = checkCache("fallback");
-        if(health.minResponseTime() > 200 && !health.failing()){
+        if(health.minResponseTime() > 1000|| health.failing() && healthFallback.minResponseTime() > 1000){
             payments.add(pay);
-        }
-        if(health.minResponseTime() <= 150 && !health.failing()){
+        }else if(healthFallback.minResponseTime() < 400 || health.minResponseTime() > 600){
+            pay.setProcessor(Processor.FALLBACK);
+            doPostPayments("fallback",pay);
+            service.inserirPayment(pay);
+        } else if(health.minResponseTime() <= 500 && !health.failing()){
             //fazer o post no default se o valor for menor que 150 ms;
+            pay.setProcessor(Processor.DEFAULT);
             doPostPayments("default",pay);
-        }else if(health.failing() && healthFallback.minResponseTime() < 500){
-            // seo estiver falhando e o vetor maior que 10 fazer no fallback
-            doPostPaymentsArray("fallback");
+            service.inserirPayment(pay);
+//        }else if(health.failing() && healthFallback.minResponseTime() < 300 && this.payments.size() > 10){
+//            // seo estiver falhando e o vetor maior que 10 fazer no fallback
+//                doPostPaymentsArray("fallback");
         }
+//        else if(health.minResponseTime() < 400 && this.payments.size() > 10){
+//            doPostPaymentsArray("default");
+//        }
 
 
     }
@@ -121,13 +132,15 @@ public class CacheController {
 
             while(!this.payments.isEmpty()){
                 PaymentRequest pay = this.payments.poll();
+
+                pay.decideProcessor(payments);
                  String url = "http://payment-processor-" + payments + ":8080/payments";
             String jsonPayload = "{"
                     + "\"correlationId\": \"" + pay.getCorrelationId() + "\", "
                     + "\"amount\": " + pay.getAmount()
                     + "}";
 
-           
+
                 HttpPost request = new HttpPost(url);
                 StringEntity requestEntity = new StringEntity(jsonPayload, ContentType.APPLICATION_JSON);
                 request.setEntity(requestEntity);
@@ -135,6 +148,7 @@ public class CacheController {
                     int status = response.getStatusLine().getStatusCode();
 
                     if (status >= 200 && status <= 299) {
+
                         service.inserirPayment(pay);
                     }
 

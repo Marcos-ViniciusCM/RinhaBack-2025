@@ -59,4 +59,12 @@ public class PaymentRequest {
     public void setRequest_at(Instant request_at) {
         this.request_at = request_at;
     }
+
+    public void decideProcessor(String processor){
+            if(processor.equals("fallback")){
+                this.processor = Processor.FALLBACK;
+            }else{
+                this.processor = Processor.DEFAULT;
+            }
+    }
 }
