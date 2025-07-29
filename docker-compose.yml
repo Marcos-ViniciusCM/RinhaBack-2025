@@ -11,7 +11,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: rinha
     volumes:
-      - /c/Users/MARCOS/Desktop/appquarkus/appquarkus/src/main/resources/db/migration/V1__create_paymentRequest_table.sql:/docker-entrypoint-initdb.d/V1__create_paymentRequest_table.sql
+      - ./src/main/resources/db/migration/V1__create_paymentRequest_table.sql:/docker-entrypoint-initdb.d/V1__create_paymentRequest_table.sql
     networks:
       - payment-network
     healthcheck:
@@ -35,7 +35,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: rinha
     volumes:
-      - /c/Users/MARCOS/Desktop/appquarkus/appquarkus/src/main/resources/db/migration/V1__create_paymentRequest_table.sql:/docker-entrypoint-initdb.d/V1__create_paymentRequest_table.sql
+      - ./src/main/resources/db/migration/V1__create_paymentRequest_table.sql:/docker-entrypoint-initdb.d/V1__create_paymentRequest_table.sql
     networks:
       - payment-network
 #    deploy:

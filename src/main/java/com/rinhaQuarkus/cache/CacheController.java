@@ -16,6 +16,12 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
 
+import java.io.IOException;
+import java.net.URI;
+import java.net.URL;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Queue;
@@ -32,11 +38,9 @@ public class CacheController {
 
     private final Set<String> paymentsId = ConcurrentHashMap.newKeySet();
 
-    private final CloseableHttpClient httpClient;
+    private final HttpClient client = HttpClient.newHttpClient();
 
-    public CacheController() {
-        this.httpClient = HttpClients.createDefault();
-    }
+  
 
 
 
@@ -58,22 +62,24 @@ public class CacheController {
     }
 
     private ServiceHealthDto callHeathCheck(String processor){
-        String url = ( "http://payment-processor-"+processor+":8080/payments/service-health");
-        
-            HttpGet request = new HttpGet(url);
-            try(CloseableHttpResponse response = httpClient.execute(request)){
-                int status = response.getStatusLine().getStatusCode();
+        try{
+                String url = ( "http://payment-processor-"+processor+":8080/payments/service-health");
+                
+                HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .GET()
+                    .build();
 
-                if(status < 200 || status > 299){
-                    throw new RuntimeException("Service health check failed for processor: " + processor);
+                    HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+                if (response.statusCode() < 200 || response.statusCode() > 299){
+                            throw new RuntimeException("Service health check failed for processor: " + processor);
                 }
-
-                String json = EntityUtils.toString(response.getEntity());
-                return objectMapper.readValue(json, ServiceHealthDto.class);
-            
-        } catch (java.io.IOException e) {
-            throw new RuntimeException(e);
-        }
+                        String json = response.body();
+                        return objectMapper.readValue(json, ServiceHealthDto.class);
+            }catch(IOException | InterruptedException e){
+                throw new RuntimeException("Erro na chamada HTTP", e);
+            }
     }
 
 
@@ -91,13 +97,13 @@ public class CacheController {
             pay.setProcessor(Processor.DEFAULT);
             doPostPayments("default",pay);
             service.inserirPayment(pay);
-//        }else if(health.failing() && healthFallback.minResponseTime() < 300 && this.payments.size() > 10){
-//            // seo estiver falhando e o vetor maior que 10 fazer no fallback
-//                doPostPaymentsArray("fallback");
+        }else if(health.failing() && healthFallback.minResponseTime() < 300 && this.payments.size() > 10){
+            // seo estiver falhando e o vetor maior que 10 fazer no fallback
+                doPostPaymentsArray("fallback");
         }
-//        else if(health.minResponseTime() < 400 && this.payments.size() > 10){
-//            doPostPaymentsArray("default");
-//        }
+        else if(health.minResponseTime() < 400 && this.payments.size() > 10){
+            doPostPaymentsArray("default");
+        }
 
 
     }
@@ -105,63 +111,60 @@ public class CacheController {
 
     public void doPostPayments(String payments ,PaymentRequest pay){
         String url = "http://payment-processor-"+payments+":8080/payments";
-        String jsonPayload = "{"
-                + "\"correlationId\": \"" + pay.getCorrelationId() + "\", "
-                + "\"amount\": " + pay.getAmount()
-                + "}";
+       
 
         
-            HttpPost request = new HttpPost(url);
-            StringEntity requestEntity = new StringEntity(jsonPayload, ContentType.APPLICATION_JSON);
-            request.setEntity(requestEntity);
-            try(CloseableHttpResponse response = httpClient.execute(request)){
-                int status = response.getStatusLine().getStatusCode();
 
-                if (status >= 200 && status <= 299) {
-                    service.inserirPayment(pay);
-                }
-
-            
-        } catch (java.io.IOException e) {
-            throw new RuntimeException(e);
+            try {
+                 String jsonPayload = objectMapper.writeValueAsString(payments);
+            HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(url))
+            .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
+            .header("Content-Type", "application/json")
+            .build();
+                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                processPaymentIfNotExists(pay);
         }
+
+            } catch (Exception e) {
+                
+            }
+
     }
 
 
     private void doPostPaymentsArray(String payments){
 
             while(!this.payments.isEmpty()){
-                PaymentRequest pay = this.payments.poll();
+              
+
+            try {
+                  PaymentRequest pay = this.payments.poll();
 
                 pay.decideProcessor(payments);
                  String url = "http://payment-processor-" + payments + ":8080/payments";
-            String jsonPayload = "{"
-                    + "\"correlationId\": \"" + pay.getCorrelationId() + "\", "
-                    + "\"amount\": " + pay.getAmount()
-                    + "}";
-
-
-                HttpPost request = new HttpPost(url);
-                StringEntity requestEntity = new StringEntity(jsonPayload, ContentType.APPLICATION_JSON);
-                request.setEntity(requestEntity);
-                try (CloseableHttpResponse response = httpClient.execute(request)) {
-                    int status = response.getStatusLine().getStatusCode();
-
-                    if (status >= 200 && status <= 299) {
-
-                        service.inserirPayment(pay);
-                    }
+           String jsonPayload = objectMapper.writeValueAsString(pay);
 
                 
-            } catch (java.io.IOException e) {
-                throw new RuntimeException(e);
-            }
-        
+            HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(url))
+            .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
+            .header("Content-Type", "application/json")
+            .build();
+                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                processPaymentIfNotExists(pay);
+        }
+
+            } catch (Exception e) {
                 
             }
            
-        
     }
+           
+        
+}
 
 
     public void addPayment(PaymentRequest pay){
@@ -169,4 +172,20 @@ public class CacheController {
             payments.add(pay);
         }
     }
+
+
+public synchronized void processPaymentIfNotExists(PaymentRequest pay) {
+    boolean isNew = paymentsId.add(pay.getCorrelationId().toString());
+    if (!isNew) return;
+
+    try {
+        service.inserirPayment(pay);
+    } catch (Exception e) {
+        // Em caso de falha, remova para permitir retry
+        paymentsId.remove(pay.getCorrelationId().toString());
+        throw e;
+    }
 }
+
+}
+

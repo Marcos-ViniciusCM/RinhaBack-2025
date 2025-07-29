@@ -11,6 +11,8 @@ import jakarta.ws.rs.core.Response;
 
 import java.time.Instant;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 
 @Path("/")
 @Produces(MediaType.APPLICATION_JSON)
@@ -23,11 +25,17 @@ public class PaymentsController {
     @Inject
     DataService service;
 
+    
+
     @POST
     @Path("/payments")
     public Response createPayment(PaymentRequest pay){
         //cache.decideWich(pay);
-        CompletableFuture.runAsync(() -> cache.decideWich(pay));
+       CompletableFuture.runAsync(() -> cache.decideWich(pay));
+    //   Thread.startVirtualThread(() -> 
+     //  {
+      //  cache.decideWich(pay);
+     //  });
         return Response.accepted().build();
        // return Response.ok().build();
     }
