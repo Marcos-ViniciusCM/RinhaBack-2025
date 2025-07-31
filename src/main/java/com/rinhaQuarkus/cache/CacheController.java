@@ -5,6 +5,8 @@ import com.rinhaQuarkus.DTO.ServiceHealthDto;
 import com.rinhaQuarkus.enums.Processor;
 import com.rinhaQuarkus.jdbc.api.DataService;
 import com.rinhaQuarkus.model.PaymentRequest;
+
+import io.quarkus.scheduler.Scheduled;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.apache.http.client.methods.CloseableHttpResponse;
@@ -39,7 +41,7 @@ public class CacheController {
     private final Set<String> paymentsId = ConcurrentHashMap.newKeySet();
 
     private final HttpClient client = HttpClient.newHttpClient();
-
+private volatile ServiceHealthDto lastHealthCheck = null;
   
 
 
@@ -56,14 +58,29 @@ public class CacheController {
         if(cached != null && !cached.isExpired()){
             return cached.getData();
         }
-        ServiceHealthDto fresh = callHeathCheck(key);
+        //ServiceHealthDto fresh = callHeathCheck(key);
+        ServiceHealthDto fresh = callHeathCheck();
         cache.put(key, new CacheHealth(fresh , Instant.now().plusSeconds(5)));
         return fresh;
     }
 
-    private ServiceHealthDto callHeathCheck(String processor){
+    @Scheduled(every = "5s")
+    public void updateCache(){
         try{
-                String url = ( "http://payment-processor-"+processor+":8080/payments/service-health");
+            ServiceHealthDto fresh = callHeathCheck();
+            cache.put("default", new CacheHealth(fresh, Instant.now().plusSeconds(5)));
+
+             ServiceHealthDto fresh2 = callHeathCheck();
+            cache.put("fallback", new CacheHealth(fresh2, Instant.now().plusSeconds(5)));
+
+        }catch(Exception e){
+            
+        }
+    }
+
+    private ServiceHealthDto callHeathCheck(){
+        try{
+                String url = ( "http://payment-processor-default:8080/payments/service-health");
                 
                 HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
@@ -73,7 +90,7 @@ public class CacheController {
                     HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
                 if (response.statusCode() < 200 || response.statusCode() > 299){
-                            throw new RuntimeException("Service health check failed for processor: " + processor);
+                            throw new RuntimeException("Service health check failed for processor: ");
                 }
                         String json = response.body();
                         return objectMapper.readValue(json, ServiceHealthDto.class);
@@ -82,39 +99,25 @@ public class CacheController {
             }
     }
 
-
     public void decideWich(PaymentRequest pay){
-        ServiceHealthDto health = checkCache("default");
-        ServiceHealthDto healthFallback = checkCache("fallback");
-        if(health.minResponseTime() > 1000|| health.failing() && healthFallback.minResponseTime() > 1000){
-            payments.add(pay);
-        }else if(healthFallback.minResponseTime() < 400 || health.minResponseTime() > 600){
-            pay.setProcessor(Processor.FALLBACK);
-            doPostPayments("fallback",pay);
-            service.inserirPayment(pay);
-        } else if(health.minResponseTime() <= 500 && !health.failing()){
-            //fazer o post no default se o valor for menor que 150 ms;
-            pay.setProcessor(Processor.DEFAULT);
-            doPostPayments("default",pay);
-            service.inserirPayment(pay);
-        }else if(health.failing() && healthFallback.minResponseTime() < 300 && this.payments.size() > 10){
-            // seo estiver falhando e o vetor maior que 10 fazer no fallback
-                doPostPaymentsArray("fallback");
+       // ServiceHealthDto health = checkCache("default");
+         ServiceHealthDto health = cache.get("default").getData();
+        if(health.failing()){
+        doPostPayments( pay, "fallback");
+        pay.setProcessor(Processor.FALLBACK);
+        service.inserirPayment(pay);
+        }else{
+             doPostPayments( pay, "default");
+        pay.setProcessor(Processor.DEFAULT);
+        service.inserirPayment(pay);
         }
-        else if(health.minResponseTime() < 400 && this.payments.size() > 10){
-            doPostPaymentsArray("default");
-        }
-
+        
 
     }
 
 
-    public void doPostPayments(String payments ,PaymentRequest pay){
-        String url = "http://payment-processor-"+payments+":8080/payments";
-       
-
-        
-
+    public void doPostPayments(PaymentRequest pay,String processor){
+        String url = "http://payment-processor-"+processor+":8080/payments";
             try {
                  String jsonPayload = objectMapper.writeValueAsString(payments);
             HttpRequest request = HttpRequest.newBuilder()
