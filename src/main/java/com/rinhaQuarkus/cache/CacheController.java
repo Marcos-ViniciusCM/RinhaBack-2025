@@ -102,17 +102,17 @@ public class CacheController {
        // ServiceHealthDto health = checkCache("default");
         ServiceHealthDto health = cache.get("default").getData();
         String processor;
-        if(health.failing()){
-        pay.setProcessor(Processor.FALLBACK);
-        processor = "fallback";
-        doPostPayments( pay, "fallback");
-        service.inserirPayment(pay);
-        }else{
+     //   if(health.failing()){
+     //   pay.setProcessor(Processor.FALLBACK);
+     //   processor = "fallback";
+     //   doPostPayments( pay, "fallback");
+     //   
+       // }else{
+
         pay.setProcessor(Processor.DEFAULT);
-        processor = "default";
         doPostPayments( pay, "default");
         service.inserirPayment(pay);
-        }
+       // }
 
 //        boolean sucess = doPostPayments(pay,processor);
 //        if(sucess){
@@ -121,7 +121,7 @@ public class CacheController {
     }
 
 
-    public boolean doPostPayments(PaymentRequest pay,String processor){
+    public void doPostPayments(PaymentRequest pay,String processor){
         String url = "http://payment-processor-"+processor+":8080/payments";
             try {
                  String jsonPayload = objectMapper.writeValueAsString(pay);
@@ -131,12 +131,13 @@ public class CacheController {
             .header("Content-Type", "application/json")
             .build();
                 HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-                return response.statusCode() >= 200 && response.statusCode() < 300;
+                if(response.statusCode() >= 200 && response.statusCode() <= 299){
+                    service.inserirPayment(pay);
+                };
 
             } catch (Exception e) {
                 
             }
-            return false;
     }
 
 

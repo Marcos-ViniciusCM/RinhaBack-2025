@@ -2,6 +2,7 @@ package com.rinhaQuarkus.controller;
 
 import com.rinhaQuarkus.DTO.PaymentsSumaryDto;
 import com.rinhaQuarkus.cache.CacheController;
+import com.rinhaQuarkus.enums.Processor;
 import com.rinhaQuarkus.jdbc.api.DataService;
 import com.rinhaQuarkus.model.PaymentRequest;
 import jakarta.inject.Inject;
@@ -31,11 +32,16 @@ public class PaymentsController {
     @Path("/payments")
     public Response createPayment(PaymentRequest pay){
         //cache.decideWich(pay);
-       CompletableFuture.runAsync(() -> cache.decideWich(pay));
+     //  CompletableFuture.runAsync(() -> {
+     //  pay.setProcessor(Processor.DEFAULT);
+     //  cache.decideWich(pay);
+  //  });
+    
     //   Thread.startVirtualThread(() -> 
      //  {
       //  cache.decideWich(pay);
      //  });
+        cache.decideWich(pay);
         return Response.accepted().build();
        // return Response.ok().build();
     }
@@ -43,8 +49,14 @@ public class PaymentsController {
     @GET
     @Path("/payments-summary")
     public Response getPaymentSumary(@QueryParam("from")Instant from , @QueryParam("to") Instant to){
+       try{
         PaymentsSumaryDto sumary = service.pegarPayments(from,to);
         return Response.ok(sumary).build();
+       }catch(Exception e){
+       
+        throw new WebApplicationException("Erro interno ao gerar o resumo", 500);
+       }
+       
     }
 
     @GET

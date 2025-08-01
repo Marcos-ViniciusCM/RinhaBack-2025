@@ -1,49 +1,6 @@
 version: '3.8'
 
 services:
-  payment-processor-default-db:
-    image: postgres:17-alpine
-    hostname: payment-processor-default-db
-    ports:
-      - "54321:5432"
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: rinha
-    volumes:
-      - ./src/main/resources/db/migration/V1__create_paymentRequest_table.sql:/docker-entrypoint-initdb.d/V1__create_paymentRequest_table.sql
-    networks:
-      - payment-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    deploy:
-      resources:
-        limits:
-          cpus: "1.0"
-          memory: "512MB"
-
-  payment-processor-fallback-db:
-    image: postgres:17-alpine
-    hostname: payment-processor-fallback-db
-    ports:
-      - "54322:5432"
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: rinha
-    volumes:
-      - ./src/main/resources/db/migration/V1__create_paymentRequest_table.sql:/docker-entrypoint-initdb.d/V1__create_paymentRequest_table.sql
-    networks:
-      - payment-network
-    deploy:
-      resources:
-        limits:
-          cpus: "1.0"
-          memory: "512MB"
-
   quarkus-app-1:
     image: pedra0x910/payment-quarkus:latest
     ports:
@@ -55,7 +12,7 @@ services:
       QUARKUS_DATASOURCE_USERNAME: postgres
       QUARKUS_DATASOURCE_PASSWORD: postgres
     networks:
-      - payment-network
+      - payment-processor
     depends_on:
       payment-processor-default-db:
         condition: service_healthy
@@ -76,7 +33,7 @@ services:
       QUARKUS_DATASOURCE_USERNAME: postgres
       QUARKUS_DATASOURCE_PASSWORD: postgres
     networks:
-      - payment-network
+      - payment-processor
     depends_on:
       payment-processor-default-db:
         condition: service_healthy
@@ -86,43 +43,7 @@ services:
 #          cpus: "0.75"
 #          memory: "256MB"
 
-  payment-processor-default:
-    image: zanfranceschi/payment-processor:amd64-20250707101540
-    environment:
-      TRANSACTION_FEE: 0.05
-      RATE_LIMIT_SECONDS: 5
-      INITIAL_TOKEN: 123
-      DB_CONNECTION_STRING: Host=payment-processor-default-db;Port=5432;Database=rinha;Username=postgres;Password=postgres
-    ports:
-      - "8001:8080"
-    networks:
-      - payment-network
-    depends_on:
-      - payment-processor-default-db
-    deploy:
-      resources:
-        limits:
-          cpus: "1.0"
-          memory: "256MB"
-
-  payment-processor-fallback:
-    image: zanfranceschi/payment-processor:amd64-20250707101540
-    environment:
-      TRANSACTION_FEE: 0.15
-      RATE_LIMIT_SECONDS: 5
-      INITIAL_TOKEN: 123
-      DB_CONNECTION_STRING: Host=payment-processor-fallback-db;Port=5432;Database=rinha;Username=postgres;Password=postgres
-    ports:
-      - "8002:8080"
-    networks:
-      - payment-network
-    depends_on:
-      - payment-processor-fallback-db
-    deploy:
-      resources:
-        limits:
-          cpus: "1.0"
-          memory: "256MB"
+  
 
   nginx:
     image: nginx:latest
@@ -131,7 +52,7 @@ services:
     ports:
       - "9999:80"
     networks:
-      - payment-network
+      - payment-processor
     depends_on:
       - quarkus-app-1
       - quarkus-app-2
@@ -142,5 +63,5 @@ services:
           memory: "128MB"
 
 networks:
-  payment-network:
-    driver: bridge
+  payment-processor:
+    external: true
