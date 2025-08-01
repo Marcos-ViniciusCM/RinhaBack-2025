@@ -7,6 +7,7 @@ import com.rinhaQuarkus.jdbc.api.DataService;
 import com.rinhaQuarkus.model.PaymentRequest;
 
 import io.quarkus.scheduler.Scheduled;
+import io.vertx.ext.web.client.WebClient;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.apache.http.client.methods.CloseableHttpResponse;
@@ -41,15 +42,13 @@ public class CacheController {
     private final Set<String> paymentsId = ConcurrentHashMap.newKeySet();
 
     private final HttpClient client = HttpClient.newHttpClient();
-private volatile ServiceHealthDto lastHealthCheck = null;
-  
-
-
-
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Inject
     DataService service;
+
+   // @Inject
+   // WebClient webClient;
 
 
 
@@ -101,39 +100,43 @@ private volatile ServiceHealthDto lastHealthCheck = null;
 
     public void decideWich(PaymentRequest pay){
        // ServiceHealthDto health = checkCache("default");
-         ServiceHealthDto health = cache.get("default").getData();
+        ServiceHealthDto health = cache.get("default").getData();
+        String processor;
         if(health.failing()){
-        doPostPayments( pay, "fallback");
         pay.setProcessor(Processor.FALLBACK);
+        processor = "fallback";
+        doPostPayments( pay, "fallback");
         service.inserirPayment(pay);
         }else{
-             doPostPayments( pay, "default");
         pay.setProcessor(Processor.DEFAULT);
+        processor = "default";
+        doPostPayments( pay, "default");
         service.inserirPayment(pay);
         }
-        
 
+//        boolean sucess = doPostPayments(pay,processor);
+//        if(sucess){
+//            service.inserirPayment(pay);
+//        }
     }
 
 
-    public void doPostPayments(PaymentRequest pay,String processor){
+    public boolean doPostPayments(PaymentRequest pay,String processor){
         String url = "http://payment-processor-"+processor+":8080/payments";
             try {
-                 String jsonPayload = objectMapper.writeValueAsString(payments);
+                 String jsonPayload = objectMapper.writeValueAsString(pay);
             HttpRequest request = HttpRequest.newBuilder()
             .uri(URI.create(url))
             .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
             .header("Content-Type", "application/json")
             .build();
                 HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() >= 200 && response.statusCode() < 300) {
-                processPaymentIfNotExists(pay);
-        }
+                return response.statusCode() >= 200 && response.statusCode() < 300;
 
             } catch (Exception e) {
                 
             }
-
+            return false;
     }
 
 
@@ -170,11 +173,6 @@ private volatile ServiceHealthDto lastHealthCheck = null;
 }
 
 
-    public void addPayment(PaymentRequest pay){
-        if(paymentsId.add(pay.getCorrelationId().toString())){
-            payments.add(pay);
-        }
-    }
 
 
 public synchronized void processPaymentIfNotExists(PaymentRequest pay) {

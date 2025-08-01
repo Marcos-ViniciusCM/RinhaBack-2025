@@ -18,6 +18,23 @@ public class DataService {
     @Inject
     AgroalDataSource dataSource;
 
+    public void warmUp() throws SQLException {
+       try( Connection con = dataSource.getConnection();
+           PreparedStatement ps = con.prepareStatement("SELECT processor, COUNT(*) AS totalRequests," +
+                   " SUM(amount) AS totalAmount FROM payments WHERE requested_at BETWEEN ? AND ? GROUP BY processor")){
+           ps.setTimestamp(1, Timestamp.from(Instant.now().minusSeconds(3600)));
+           ps.setTimestamp(2, Timestamp.from(Instant.now()));
+           try (ResultSet rs = ps.executeQuery()) {
+               while (rs.next()) {
+                   // só para iterar e carregar
+                   rs.getString("processor");
+                   rs.getInt("totalRequests");
+                   rs.getBigDecimal("totalAmount");
+               }
+           }
+       }
+    }
+
     public PaymentsSumaryDto pegarPayments(Instant from , Instant to ) {
         String sql = """
         SELECT processor, COUNT(*) AS totalRequests, SUM(amount) AS totalAmount
