@@ -1,67 +1,74 @@
-version: '3.8'
+version: "3.9"
 
 services:
-  quarkus-app-1:
-    image: pedra0x910/payment-quarkus:latest
-    ports:
-      - "10001:8080"
-    environment:
-      QUARKUS_PROFILE: prod
-      QUARKUS_HTTP_HOST: 0.0.0.0
-      QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://payment-processor-default-db:5432/rinha
-      QUARKUS_DATASOURCE_USERNAME: postgres
-      QUARKUS_DATASOURCE_PASSWORD: postgres
-    networks:
-      - payment-processor
-    depends_on:
-      payment-processor-default-db:
-        condition: service_healthy
-#    deploy:
-#      resources:
-#        limits:
-#          cpus: "0.75"
-#          memory: "256MB"
-
-  quarkus-app-2:
-    image: pedra0x910/payment-quarkus:latest
-    ports:
-      - "10002:8080"
-    environment:
-      QUARKUS_PROFILE: prod
-      QUARKUS_HTTP_HOST: 0.0.0.0
-      QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://payment-processor-default-db:5432/rinha
-      QUARKUS_DATASOURCE_USERNAME: postgres
-      QUARKUS_DATASOURCE_PASSWORD: postgres
-    networks:
-      - payment-processor
-    depends_on:
-      payment-processor-default-db:
-        condition: service_healthy
-#    deploy:
-#      resources:
-#        limits:
-#          cpus: "0.75"
-#          memory: "256MB"
-
-  
-
   nginx:
     image: nginx:latest
     volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-    ports:
-      - "9999:80"
-    networks:
-      - payment-processor
+      - ./nginx.conf:/etc/nginx/nginx.conf
     depends_on:
-      - quarkus-app-1
-      - quarkus-app-2
+      - api1
+      - api2
+    ports:
+      - "9999:80"  # Corrigido para porta 80 padrão do nginx
+    networks:
+      - backend
     deploy:
       resources:
         limits:
-          cpus: "1.0"
-          memory: "128MB"
+          cpus: "0.15"
+          memory: "30MB"
+
+  api1: &api
+    image: pedra0x910/payment-quarkus:latest
+    environment:
+      QUARKUS_PROFILE: prod
+      QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://db:5432/rinha
+      QUARKUS_DATASOURCE_USERNAME: postgres
+      QUARKUS_DATASOURCE_PASSWORD: postgres
+    depends_on:
+      db:
+        condition: service_healthy
+    hostname: api1
+    networks:
+      - backend
+      - payment-processor
+    ports:
+      - "8080:8080"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.6"
+          memory: "140MB"
+
+  api2:
+    <<: *api
+    hostname: api2
+    ports:
+      - "8081:8080"
+
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_DB: rinha
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "5432:5432"
+    networks:
+      - payment-processor
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: "256MB"
 
 networks:
+  backend:
+    driver: bridge
   payment-processor:
     external: true

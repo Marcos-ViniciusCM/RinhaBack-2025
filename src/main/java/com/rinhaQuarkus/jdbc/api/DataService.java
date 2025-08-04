@@ -5,6 +5,7 @@ import com.rinhaQuarkus.DTO.FallbackSumaryDto;
 import com.rinhaQuarkus.DTO.PaymentsSumaryDto;
 import com.rinhaQuarkus.model.PaymentRequest;
 import io.agroal.api.AgroalDataSource;
+import io.quarkus.agroal.DataSource;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
