@@ -63,29 +63,27 @@ public class DataService {
     }
 
 
-    public void inserirPayment(PaymentRequest payments){
-        if (payments.getCorrelationId() == null || payments.getAmount() == null || payments.getProcessor() == null) {
-            throw new IllegalArgumentException("Invalid payment data: CorrelationId, Amount, and Processor must not be null.");
+    public void inserirPayment(PaymentRequest payment) {
+        // Validação completa
+        if (payment.getCorrelationId() == null ||
+                payment.getAmount() == null ||
+                payment.getProcessor() == null) {
+            throw new IllegalArgumentException("Todos os campos são obrigatórios: " + payment);
         }
-        Instant now = Instant.now();
-       // payments.setRequest_at(now);
-        String sql = """
-                    INSERT INTO payments( correlationId , amount , processor , requested_at ) 
-                    VALUES( ? , ? , ? , ?);
-                    """;
-        try(
-                Connection conn = dataSource.getConnection();
-                PreparedStatement statement = conn.prepareStatement(sql);
-        ){
 
-            statement.setObject(1,payments.getCorrelationId());
-            statement.setBigDecimal(2 , payments.getAmount());
-            //statement.setObject(3 , payments.getProcessor().name().toLowerCase());
-            statement.setObject(3 ,"default");
-            statement.setTimestamp(4 ,Timestamp.from(now));
-            statement.executeUpdate();
+        String sql = "INSERT INTO payments(correlationId, amount, processor, requested_at) VALUES (?, ?, ?, ?)";
+
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setObject(1, payment.getCorrelationId());
+            stmt.setBigDecimal(2, payment.getAmount());
+            stmt.setString(3, payment.getProcessor().name().toLowerCase());
+            stmt.setTimestamp(4, Timestamp.from(Instant.now()));
+
+            stmt.executeUpdate();
         } catch (SQLException e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("Falha ao inserir pagamento", e);
         }
     }
 

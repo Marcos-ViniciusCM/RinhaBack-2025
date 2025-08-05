@@ -26,21 +26,21 @@ public class PaymentsController {
     @Inject
     DataService service;
 
-    
+
 
     @POST
     @Path("/payments")
     public Response createPayment(PaymentRequest pay){
         //cache.decideWich(pay);
      //  CompletableFuture.runAsync(() -> {
-     //  pay.setProcessor(Processor.DEFAULT);
+       pay.setProcessor(Processor.FALLBACK);
      //  cache.decideWich(pay);
   //  });
-    
-    //   Thread.startVirtualThread(() -> 
-     //  {
-      //  cache.decideWich(pay);
-     //  });
+
+//       Thread.startVirtualThread(() ->
+//       {
+//        cache.decideWich(pay);
+//       });
         cache.decideWich(pay);
         return Response.accepted().build();
        // return Response.ok().build();
@@ -53,10 +53,10 @@ public class PaymentsController {
         PaymentsSumaryDto sumary = service.pegarPayments(from,to);
         return Response.ok(sumary).build();
        }catch(Exception e){
-       
+
         throw new WebApplicationException("Erro interno ao gerar o resumo", 500);
        }
-       
+
     }
 
     @GET

@@ -3,72 +3,45 @@ version: "3.9"
 services:
   nginx:
     image: nginx:latest
+    hostname: nginx
+    container_name: nginx
+    command: [ "nginx", "-g", "daemon off;" ]
     volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - api1
       - api2
     ports:
-      - "9999:80"  # Corrigido para porta 80 padrão do nginx
+      - "9999:80"
     networks:
       - backend
-    deploy:
-      resources:
-        limits:
-          cpus: "0.15"
-          memory: "30MB"
 
   api1: &api
     image: pedra0x910/payment-quarkus:latest
-    environment:
-      QUARKUS_PROFILE: prod
-      QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://db:5432/rinha
-      QUARKUS_DATASOURCE_USERNAME: postgres
-      QUARKUS_DATASOURCE_PASSWORD: postgres
-    depends_on:
-      db:
-        condition: service_healthy
     hostname: api1
+    container_name: api1
+    environment:
+      - QUARKUS_DATASOURCE_JDBC_URL=jdbc:postgresql://payment-processor-fallback-db/rinha
+      - QUARKUS_DATASOURCE_USERNAME=postgres
+      - QUARKUS_DATASOURCE_PASSWORD=postgres
+      - PAYMENT_PROCESSOR_DEFAULT_URL=http://payment-processor-default:8080
+      - PAYMENT_PROCESSOR_FALLBACK_URL=http://payment-processor-fallback:8080
     networks:
       - backend
       - payment-processor
     ports:
       - "8080:8080"
-    deploy:
-      resources:
-        limits:
-          cpus: "0.6"
-          memory: "140MB"
 
   api2:
     <<: *api
     hostname: api2
+    container_name: api2
     ports:
       - "8081:8080"
 
-  db:
-    image: postgres:17-alpine
-    environment:
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_USER: postgres
-      POSTGRES_DB: rinha
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    ports:
-      - "5432:5432"
-    networks:
-      - payment-processor
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: "256MB"
-
 networks:
   backend:
+    name: backend
     driver: bridge
   payment-processor:
     external: true

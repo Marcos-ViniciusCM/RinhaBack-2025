@@ -108,8 +108,8 @@ public class CacheController {
      //   doPostPayments( pay, "fallback");
      //   
        // }else{
-
-        pay.setProcessor(Processor.DEFAULT);
+        pay.setProcessor(Processor.FALLBACK);
+        //pay.setProcessor(Processor.DEFAULT);
         doPostPayments( pay, "default");
         service.inserirPayment(pay);
        // }
@@ -132,7 +132,7 @@ public class CacheController {
             .build();
                 HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
                 if(response.statusCode() >= 200 && response.statusCode() <= 299){
-                    service.inserirPayment(pay);
+                   // service.inserirPayment(pay);
                 };
 
             } catch (Exception e) {
