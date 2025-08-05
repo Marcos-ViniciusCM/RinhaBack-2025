@@ -1,10 +1,13 @@
 package com.rinhaQuarkus.controller;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.rinhaQuarkus.DTO.PaymentsSumaryDto;
 import com.rinhaQuarkus.cache.CacheController;
 import com.rinhaQuarkus.enums.Processor;
 import com.rinhaQuarkus.jdbc.api.DataService;
 import com.rinhaQuarkus.model.PaymentRequest;
+
+import io.quarkus.vertx.http.runtime.devmode.Json.JsonObjectBuilder;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
@@ -14,6 +17,8 @@ import java.time.Instant;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+
+
 
 @Path("/")
 @Produces(MediaType.APPLICATION_JSON)
@@ -37,10 +42,10 @@ public class PaymentsController {
      //  cache.decideWich(pay);
   //  });
 
-//       Thread.startVirtualThread(() ->
-//       {
-//        cache.decideWich(pay);
-//       });
+     //  Thread.startVirtualThread(() ->
+     //  {
+      //  cache.decideWich(pay);
+     //  });
         cache.decideWich(pay);
         return Response.accepted().build();
        // return Response.ok().build();
@@ -50,6 +55,7 @@ public class PaymentsController {
     @Path("/payments-summary")
     public Response getPaymentSumary(@QueryParam("from")Instant from , @QueryParam("to") Instant to){
        try{
+
         PaymentsSumaryDto sumary = service.pegarPayments(from,to);
         return Response.ok(sumary).build();
        }catch(Exception e){

@@ -7,9 +7,9 @@ import com.rinhaQuarkus.jdbc.api.DataService;
 import com.rinhaQuarkus.model.PaymentRequest;
 
 import io.quarkus.scheduler.Scheduled;
-import io.vertx.ext.web.client.WebClient;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
@@ -31,6 +31,9 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+
+
+
 
 @ApplicationScoped
 public class CacheController {
@@ -63,7 +66,7 @@ public class CacheController {
         return fresh;
     }
 
-    @Scheduled(every = "5s")
+   // @Scheduled(every = "5s")
     public void updateCache(){
         try{
             ServiceHealthDto fresh = callHeathCheck();
@@ -88,11 +91,12 @@ public class CacheController {
 
                     HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
-                if (response.statusCode() < 200 || response.statusCode() > 299){
-                            throw new RuntimeException("Service health check failed for processor: ");
-                }
-                        String json = response.body();
+                if (response.statusCode() == 200){
+                             String json = response.body();
                         return objectMapper.readValue(json, ServiceHealthDto.class);
+                }
+                return null;
+                       
             }catch(IOException | InterruptedException e){
                 throw new RuntimeException("Erro na chamada HTTP", e);
             }
@@ -100,8 +104,7 @@ public class CacheController {
 
     public void decideWich(PaymentRequest pay){
        // ServiceHealthDto health = checkCache("default");
-        ServiceHealthDto health = cache.get("default").getData();
-        String processor;
+       // ServiceHealthDto health = cache.get("default").getData();
      //   if(health.failing()){
      //   pay.setProcessor(Processor.FALLBACK);
      //   processor = "fallback";
@@ -109,6 +112,8 @@ public class CacheController {
      //   
        // }else{
         pay.setProcessor(Processor.FALLBACK);
+        Instant now = Instant.now();
+        pay.setRequest_at(now);
         //pay.setProcessor(Processor.DEFAULT);
         doPostPayments( pay, "default");
         service.inserirPayment(pay);
@@ -122,17 +127,20 @@ public class CacheController {
 
 
     public void doPostPayments(PaymentRequest pay,String processor){
+
         String url = "http://payment-processor-"+processor+":8080/payments";
             try {
-                 String jsonPayload = objectMapper.writeValueAsString(pay);
+        
+            
+             String jsonPayload = objectMapper.writeValueAsString(payments);
             HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(url))
-            .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
-            .header("Content-Type", "application/json")
-            .build();
+                    .uri(URI.create(url))
+                    .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
+                    .header("Content-Type", "application/json")
+                    .build();
                 HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
                 if(response.statusCode() >= 200 && response.statusCode() <= 299){
-                   // service.inserirPayment(pay);
+                    service.inserirPayment(pay);
                 };
 
             } catch (Exception e) {

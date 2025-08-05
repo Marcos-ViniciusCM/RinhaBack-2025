@@ -3,6 +3,7 @@ package com.rinhaQuarkus.jdbc.api;
 import com.rinhaQuarkus.DTO.DefaultSumaryDto;
 import com.rinhaQuarkus.DTO.FallbackSumaryDto;
 import com.rinhaQuarkus.DTO.PaymentsSumaryDto;
+import com.rinhaQuarkus.enums.Processor;
 import com.rinhaQuarkus.model.PaymentRequest;
 import io.agroal.api.AgroalDataSource;
 import io.quarkus.agroal.DataSource;
@@ -75,13 +76,15 @@ public class DataService {
 
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
+            payment.setProcessor(Processor.FALLBACK);
 
             stmt.setObject(1, payment.getCorrelationId());
             stmt.setBigDecimal(2, payment.getAmount());
             stmt.setString(3, payment.getProcessor().name().toLowerCase());
-            stmt.setTimestamp(4, Timestamp.from(Instant.now()));
+            stmt.setTimestamp(4, Timestamp.from(payment.getRequest_at()));
 
             stmt.executeUpdate();
+            conn.commit();
         } catch (SQLException e) {
             throw new RuntimeException("Falha ao inserir pagamento", e);
         }

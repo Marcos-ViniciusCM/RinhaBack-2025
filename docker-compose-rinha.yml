@@ -14,7 +14,7 @@ x-service-templates:
     networks:
       - payment-processor
     volumes:
-      - ./src/main/resources/db/migration/V1__create_paymentRequest_table.sql:/docker-entrypoint-initdb.d/V1__create_paymentRequest_table.sql
+      - /c/Users/nova/Desktop/rinha/RinhaBack-2025/init.sql:/docker-entrypoint-initdb.d/init.sql
     environment:
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_USER=postgres
