@@ -86,7 +86,7 @@ public class DataService {
             stmt.executeUpdate();
             conn.commit();
         } catch (SQLException e) {
-            throw new RuntimeException("Falha ao inserir pagamento", e);
+            throw new RuntimeException("Falha ao inserir pagamento dados pay"+ payment.toString(), e );
         }
     }
 

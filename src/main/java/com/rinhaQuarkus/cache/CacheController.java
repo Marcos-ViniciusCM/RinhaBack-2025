@@ -66,14 +66,11 @@ public class CacheController {
         return fresh;
     }
 
-   // @Scheduled(every = "5s")
+    @Scheduled(every = "5s")
     public void updateCache(){
         try{
             ServiceHealthDto fresh = callHeathCheck();
             cache.put("default", new CacheHealth(fresh, Instant.now().plusSeconds(5)));
-
-             ServiceHealthDto fresh2 = callHeathCheck();
-            cache.put("fallback", new CacheHealth(fresh2, Instant.now().plusSeconds(5)));
 
         }catch(Exception e){
             
@@ -91,11 +88,11 @@ public class CacheController {
 
                     HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
-                if (response.statusCode() == 200){
-                             String json = response.body();
-                        return objectMapper.readValue(json, ServiceHealthDto.class);
+                if (response.statusCode() > 200 && response.statusCode()  < 299){
+                        
                 }
-                return null;
+                 String json = response.body();
+                        return objectMapper.readValue(json, ServiceHealthDto.class);
                        
             }catch(IOException | InterruptedException e){
                 throw new RuntimeException("Erro na chamada HTTP", e);
@@ -103,21 +100,24 @@ public class CacheController {
     }
 
     public void decideWich(PaymentRequest pay){
-       // ServiceHealthDto health = checkCache("default");
-       // ServiceHealthDto health = cache.get("default").getData();
-     //   if(health.failing()){
-     //   pay.setProcessor(Processor.FALLBACK);
-     //   processor = "fallback";
-     //   doPostPayments( pay, "fallback");
-     //   
-       // }else{
-        pay.setProcessor(Processor.FALLBACK);
+        //ServiceHealthDto health = checkCache("default");
+        //ServiceHealthDto health = cache.get("default").getData();
+
+       
+        boolean sucess ;
         Instant now = Instant.now();
         pay.setRequest_at(now);
-        //pay.setProcessor(Processor.DEFAULT);
-        doPostPayments( pay, "default");
+        pay.setProcessor(Processor.FALLBACK);
+        this.doPostPayments( pay, "fallback");
         service.inserirPayment(pay);
-       // }
+       
+    
+      
+      //  pay.setProcessor(Processor.DEFAULT);
+      //  Instant now = Instant.now();
+      //  pay.setRequest_at(now);
+      //  doPostPayments( pay, "default");
+   
 
 //        boolean sucess = doPostPayments(pay,processor);
 //        if(sucess){
@@ -130,22 +130,26 @@ public class CacheController {
 
         String url = "http://payment-processor-"+processor+":8080/payments";
             try {
-        
-            
-             String jsonPayload = objectMapper.writeValueAsString(payments);
+             String jsonPayload = objectMapper.writeValueAsString(pay);
+             System.out.println(" PaymentRequest em JSON: " + jsonPayload);
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
                     .header("Content-Type", "application/json")
                     .build();
                 HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-                if(response.statusCode() >= 200 && response.statusCode() <= 299){
-                    service.inserirPayment(pay);
+                int status = response.statusCode();
+                System.out.println( status);
+                if(response.statusCode() >= 0 && response.statusCode() <= 999){
+                   
                 };
-
+              
+               
             } catch (Exception e) {
-                
+               throw new RuntimeException("Erro na chamada HTTP do post", e);
             }
+            
+            
     }
 
 
@@ -169,7 +173,7 @@ public class CacheController {
             .build();
                 HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() >= 200 && response.statusCode() < 300) {
-                processPaymentIfNotExists(pay);
+                
         }
 
             } catch (Exception e) {
@@ -184,12 +188,13 @@ public class CacheController {
 
 
 
-public synchronized void processPaymentIfNotExists(PaymentRequest pay) {
+public synchronized void payIfNotExist(PaymentRequest pay) {
     boolean isNew = paymentsId.add(pay.getCorrelationId().toString());
     if (!isNew) return;
 
     try {
         service.inserirPayment(pay);
+        paymentsId.add(pay.getCorrelationId().toString());
     } catch (Exception e) {
         // Em caso de falha, remova para permitir retry
         paymentsId.remove(pay.getCorrelationId().toString());

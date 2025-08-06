@@ -36,19 +36,28 @@ public class PaymentsController {
     @POST
     @Path("/payments")
     public Response createPayment(PaymentRequest pay){
+        System.out.println("olll");
         //cache.decideWich(pay);
      //  CompletableFuture.runAsync(() -> {
-       pay.setProcessor(Processor.FALLBACK);
+      // pay.setProcessor(Processor.FALLBACK);
      //  cache.decideWich(pay);
   //  });
 
-     //  Thread.startVirtualThread(() ->
-     //  {
-      //  cache.decideWich(pay);
+    //   Thread.startVirtualThread(() ->
+   //    {
+     //   cache.decideWich(pay);
      //  });
         cache.decideWich(pay);
-        return Response.accepted().build();
-       // return Response.ok().build();
+        //return Response.accepted().build();
+       return Response.ok("post1").build();
+    }
+
+
+    @POST
+    @Path("/te")
+    public Response teste(PaymentRequest pay){
+        System.out.println("olll");
+       return Response.ok("post2").build();
     }
 
     @GET
@@ -68,6 +77,6 @@ public class PaymentsController {
     @GET
     @Path("/payments-tt")
     public Response getPaymentSumary(){
-        return Response.ok("oiiiiissss2").build();
+        return Response.ok("oiiiiissss23").build();
     }
 }
