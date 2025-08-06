@@ -107,8 +107,8 @@ public class CacheController {
         boolean sucess ;
         Instant now = Instant.now();
         pay.setRequest_at(now);
-        pay.setProcessor(Processor.FALLBACK);
-        this.doPostPayments( pay, "fallback");
+        pay.setProcessor(Processor.DEFAULT);
+        doPostPayments( pay, "fallback");
         service.inserirPayment(pay);
        
     
@@ -128,9 +128,14 @@ public class CacheController {
 
     public void doPostPayments(PaymentRequest pay,String processor){
 
-        String url = "http://payment-processor-"+processor+":8080/payments";
+        String url = "http://localhost:8001";
             try {
-             String jsonPayload = objectMapper.writeValueAsString(pay);
+                String jsonPayload = "{"
+                        + "\"correlationId\":\"" + pay.getCorrelationId() + "\","
+                        + "\"amount\":" + pay.getAmount() + ","
+                        + "\"processor\":\"" + pay.getProcessor() + "\","
+                        + "\"request_at\":\"" + pay.getRequest_at() + "\""
+                        + "}";
              System.out.println(" PaymentRequest em JSON: " + jsonPayload);
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
@@ -138,8 +143,8 @@ public class CacheController {
                     .header("Content-Type", "application/json")
                     .build();
                 HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-                int status = response.statusCode();
-                System.out.println( status);
+                System.out.println("Status Code: " + response.statusCode());
+                System.out.println("Response Body: " + response.body());
                 if(response.statusCode() >= 0 && response.statusCode() <= 999){
                    
                 };
