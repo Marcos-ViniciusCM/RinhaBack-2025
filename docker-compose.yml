@@ -26,7 +26,7 @@ services:
     environment:
       DB_USERNAME: rinha
       DB_PASSWORD: rinha123
-      DB_HOST: jdbc:postgresql://postgres:5432/rinha
+      DB_HOST: postgres
       DEFAULT_URL: http://payment-processor-default:8080
       FALLBACK_URL: http://payment-processor-fallback:8080
     depends_on:
@@ -45,7 +45,7 @@ services:
     environment:
       DB_USERNAME: rinha
       DB_PASSWORD: rinha123
-      DB_HOST: jdbc:postgresql://postgres:5432/rinha
+      DB_HOST: postgres
       DEFAULT_URL: http://payment-processor-default:8080
       FALLBACK_URL: http://payment-processor-fallback:8080
     depends_on:

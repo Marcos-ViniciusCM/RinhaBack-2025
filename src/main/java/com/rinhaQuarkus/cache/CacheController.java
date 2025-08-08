@@ -44,7 +44,7 @@ public class CacheController {
 
     private final Set<String> paymentsId = ConcurrentHashMap.newKeySet();
 
-    private final HttpClient client = HttpClient.newHttpClient();
+    //private final HttpClient client = HttpClient.newHttpClient();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Inject
@@ -80,7 +80,7 @@ public class CacheController {
     private ServiceHealthDto callHeathCheck(){
         try{
                 String url = ( "http://payment-processor-default:8080/payments/service-health");
-                
+                HttpClient client = HttpClient.newHttpClient();
                 HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .GET()
@@ -128,15 +128,16 @@ public class CacheController {
 
     public void doPostPayments(PaymentRequest pay,String processor){
 
-        String url = "http://localhost:8001";
+        String url = "http://payment-processor-default:8080/payments";
             try {
-                String jsonPayload = "{"
-                        + "\"correlationId\":\"" + pay.getCorrelationId() + "\","
-                        + "\"amount\":" + pay.getAmount() + ","
-                        + "\"processor\":\"" + pay.getProcessor() + "\","
-                        + "\"request_at\":\"" + pay.getRequest_at() + "\""
-                        + "}";
+                    String jsonPayload = "{"
+            + "\"correlationId\":\"" + pay.getCorrelationId() + "\","
+            + "\"amount\":" + pay.getAmount() + ","
+            + "\"requestedAt\":\"" + pay.getRequest_at() + "\""
+            + "}";
              System.out.println(" PaymentRequest em JSON: " + jsonPayload);
+            HttpClient client = HttpClient.newHttpClient();
+
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
@@ -169,6 +170,7 @@ public class CacheController {
                 pay.decideProcessor(payments);
                  String url = "http://payment-processor-" + payments + ":8080/payments";
            String jsonPayload = objectMapper.writeValueAsString(pay);
+                HttpClient client = HttpClient.newHttpClient();
 
                 
             HttpRequest request = HttpRequest.newBuilder()
