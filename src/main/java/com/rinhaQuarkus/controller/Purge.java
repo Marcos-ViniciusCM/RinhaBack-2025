@@ -19,6 +19,7 @@ public class Purge {
 
     @POST
     public Response purgeDatabase(){
+        //service.truncarPayment();
     return Response.ok().build();
     }
 }

@@ -29,6 +29,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -44,7 +45,7 @@ public class CacheController {
 
     private final Set<String> paymentsId = ConcurrentHashMap.newKeySet();
 
-    //private final HttpClient client = HttpClient.newHttpClient();
+    private final HttpClient client = HttpClient.newHttpClient();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Inject
@@ -73,14 +74,15 @@ public class CacheController {
             cache.put("default", new CacheHealth(fresh, Instant.now().plusSeconds(5)));
 
         }catch(Exception e){
-            
+            System.err.println("Erro ao atualizar cache: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
     private ServiceHealthDto callHeathCheck(){
         try{
                 String url = ( "http://payment-processor-default:8080/payments/service-health");
-                HttpClient client = HttpClient.newHttpClient();
+
                 HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .GET()
@@ -89,27 +91,36 @@ public class CacheController {
                     HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
                 if (response.statusCode() > 200 && response.statusCode()  < 299){
-                        
+                    String json = response.body();
+                    return objectMapper.readValue(json, ServiceHealthDto.class);
                 }
-                 String json = response.body();
-                        return objectMapper.readValue(json, ServiceHealthDto.class);
+
                        
             }catch(IOException | InterruptedException e){
                 throw new RuntimeException("Erro na chamada HTTP", e);
             }
+        return new ServiceHealthDto(true,1000);
     }
 
     public void decideWich(PaymentRequest pay){
         //ServiceHealthDto health = checkCache("default");
-        //ServiceHealthDto health = cache.get("default").getData();
+        ServiceHealthDto health = cache.get("default").getData();
 
        
-        boolean sucess ;
+    if(health.failing()){
+        Instant now = Instant.now();
+        pay.setRequest_at(now);
+        pay.setProcessor(Processor.FALLBACK);
+        doPostPaymentsFallback(pay);
+        //payIfNotExist(pay);
+    }else{
         Instant now = Instant.now();
         pay.setRequest_at(now);
         pay.setProcessor(Processor.DEFAULT);
-        doPostPayments( pay, "fallback");
-        service.inserirPayment(pay);
+        doPostPaymentsDefault( pay);
+       // payIfNotExist(pay);
+    }
+
        
     
       
@@ -126,7 +137,7 @@ public class CacheController {
     }
 
 
-    public void doPostPayments(PaymentRequest pay,String processor){
+    public CompletableFuture<Void> doPostPaymentsDefault(PaymentRequest pay){
 
         String url = "http://payment-processor-default:8080/payments";
             try {
@@ -136,26 +147,74 @@ public class CacheController {
             + "\"requestedAt\":\"" + pay.getRequest_at() + "\""
             + "}";
              System.out.println(" PaymentRequest em JSON: " + jsonPayload);
-            HttpClient client = HttpClient.newHttpClient();
+
+
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
                     .header("Content-Type", "application/json")
                     .build();
-                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-                System.out.println("Status Code: " + response.statusCode());
-                System.out.println("Response Body: " + response.body());
-                if(response.statusCode() >= 0 && response.statusCode() <= 999){
-                   
-                };
+//                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+//                System.out.println("Status Code: " + response.statusCode());
+//                System.out.println("Response Body: " + response.body());
+
+                return client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                        .thenAccept(response -> {
+                            if(response.statusCode() >= 200 && response.statusCode() <= 299){
+                               payIfNotExist(pay);
+                            };
+                        });
+
               
                
             } catch (Exception e) {
-               throw new RuntimeException("Erro na chamada HTTP do post", e);
+                CompletableFuture<Void> failedFuture = new CompletableFuture<>();
+                failedFuture.completeExceptionally(e);
+                return failedFuture;
+              // throw new RuntimeException("Erro na chamada HTTP do post", e);
             }
-            
-            
+    }
+
+    public CompletableFuture<Void> doPostPaymentsFallback(PaymentRequest pay){
+
+        String url = "http://payment-processor-fallback:8080/payments";
+        try {
+            String jsonPayload = "{"
+                    + "\"correlationId\":\"" + pay.getCorrelationId() + "\","
+                    + "\"amount\":" + pay.getAmount() + ","
+                    + "\"requestedAt\":\"" + pay.getRequest_at() + "\""
+                    + "}";
+            System.out.println(" PaymentRequest em JSON: " + jsonPayload);
+
+
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
+                    .header("Content-Type", "application/json")
+                    .build();
+          //  HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+           // System.out.println("Status Code: " + response.statusCode());
+           // System.out.println("Response Body: " + response.body());
+            return client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                    .thenAccept(response ->{
+                        if(response.statusCode() >= 200 && response.statusCode() <= 299){
+                            payIfNotExist(pay);
+                        };
+                    });
+
+
+
+        } catch (Exception e) {
+            CompletableFuture<Void> failedFuture = new CompletableFuture<>();
+            failedFuture.completeExceptionally(e);
+            return failedFuture;
+           // throw new RuntimeException("Erro na chamada HTTP do post fallbakc", e);
+
+        }
+
+
     }
 
 
@@ -184,7 +243,7 @@ public class CacheController {
         }
 
             } catch (Exception e) {
-                
+
             }
            
     }
@@ -201,10 +260,11 @@ public synchronized void payIfNotExist(PaymentRequest pay) {
 
     try {
         service.inserirPayment(pay);
-        paymentsId.add(pay.getCorrelationId().toString());
+
     } catch (Exception e) {
         // Em caso de falha, remova para permitir retry
         paymentsId.remove(pay.getCorrelationId().toString());
+        e.printStackTrace();
         throw e;
     }
 }

@@ -26,16 +26,16 @@ services:
     environment:
       DB_USERNAME: rinha
       DB_PASSWORD: rinha123
-      DB_HOST: postgres
+      DB_HOST: jdbc:postgresql://postgres:5432/rinha
       DEFAULT_URL: http://payment-processor-default:8080
       FALLBACK_URL: http://payment-processor-fallback:8080
     depends_on:
       - postgres
-    deploy:
-      resources:
-        limits:
-          cpus: "0.55"
-          memory: "120MB"
+#    deploy:
+#      resources:
+#        limits:
+#          cpus: "0.55"
+#          memory: "120MB"
   api02:
     image: pedra0x910/payment-quarkus:latest
     container_name: api02
@@ -45,16 +45,17 @@ services:
     environment:
       DB_USERNAME: rinha
       DB_PASSWORD: rinha123
-      DB_HOST: postgres
+      DB_HOST: jdbc:postgresql://postgres:5432/rinha
       DEFAULT_URL: http://payment-processor-default:8080
       FALLBACK_URL: http://payment-processor-fallback:8080
     depends_on:
       - postgres
-    deploy:
-      resources:
-        limits:
-          cpus: "0.55"
-          memory: "120MB"
+#    deploy:
+#      resources:
+#        limits:
+#          cpus: "0.7"
+#          memory: "120MB"
+
   postgres:
     image: postgres:16
     container_name: db
@@ -74,8 +75,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.25"
-          memory: "70MB"
+          cpus: "0.7"
+          memory: "120MB"
 
 
 networks:

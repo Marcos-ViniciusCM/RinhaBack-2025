@@ -21,12 +21,16 @@ public class DataService {
     AgroalDataSource dataSource;
 
 
-    public PaymentsSumaryDto pegarPayments(Instant from , Instant to ) {
+    public String pegarPayments(Instant from , Instant to ) {
+
         String sql = """
-        SELECT processor, COUNT(*) AS totalRequests, SUM(amount) AS totalAmount
-        FROM payments
-        WHERE requested_at BETWEEN ? AND ?
-        GROUP BY processor
+                SELECT
+                COUNT(*) FILTER (WHERE processor = 'default')  AS total_default,
+                COALESCE(SUM(amount) FILTER (WHERE processor = 'default'), 0) AS amount_default,
+                COUNT(*) FILTER (WHERE processor = 'fallback') AS total_fallback,
+                COALESCE(SUM(amount) FILTER (WHERE processor = 'fallback'), 0) AS amount_fallback
+                FROM payments
+                WHERE requested_at BETWEEN ? AND ?
         """;
         try(
             Connection conn = dataSource.getConnection();
@@ -35,32 +39,36 @@ public class DataService {
         ){
             statement.setTimestamp(1 ,Timestamp.from(from));
             statement.setTimestamp(2 ,Timestamp.from(to));
-            ResultSet rs = statement.executeQuery();
-            DefaultSumaryDto defaults = new DefaultSumaryDto(0, BigDecimal.ZERO);
-            FallbackSumaryDto fallback = new FallbackSumaryDto(0 , BigDecimal.ZERO);
 
 
-            while  (rs.next()){
-                String processor = rs.getString("processor");
-                int request = rs.getInt("totalRequests");
-                BigDecimal amount = rs.getBigDecimal("totalAmount");
-
-                if("default".equals(processor)){
-                    defaults = new DefaultSumaryDto(request , amount);
+            try(ResultSet rs = statement.executeQuery()){
+                if(rs.next()){
+                    return String.format("""
+        {
+          "default": {
+            "totalRequests": %d,
+            "totalAmount": %s
+          },
+          "fallback": {
+            "totalRequests": %d,
+            "totalAmount": %s
+          }
+        }
+        """,
+                            rs.getInt("total_default"),
+                            rs.getBigDecimal("amount_default").toPlainString(),
+                            rs.getInt("total_fallback"),
+                            rs.getBigDecimal("amount_fallback").toPlainString()
+                    );
                 }
-                if("fallback".equals(processor)){
-                    fallback = new FallbackSumaryDto(request, amount);
-                }
-
             }
 
 
-            PaymentsSumaryDto sumary = new PaymentsSumaryDto(defaults , fallback);
-            return sumary;
-
         } catch (SQLException e) {
+            System.out.println("erro gerar reusmo service");
             throw new RuntimeException(e);
         }
+        return "{}";
     }
 
 
@@ -76,7 +84,7 @@ public class DataService {
         System.out.println(" Url Conection: " + dataSource.getConfiguration().connectionPoolConfiguration().connectionFactoryConfiguration().jdbcUrl());
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
-            payment.setProcessor(Processor.FALLBACK);
+
 
             stmt.setObject(1, payment.getCorrelationId());
             stmt.setBigDecimal(2, payment.getAmount());
@@ -84,9 +92,24 @@ public class DataService {
             stmt.setTimestamp(4, Timestamp.from(payment.getRequest_at()));
 
             stmt.executeUpdate();
-            conn.commit();
+            //conn.commit();
         } catch (SQLException e) {
             throw new RuntimeException("Falha ao inserir pagamento dados pay"+ payment.toString(), e );
+        }
+    }
+
+
+
+    public void truncarPayment() {
+        String sql = "TRUNCATE TABLE payments";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+
+            stmt.executeUpdate();
+            //conn.commit();
+        } catch (SQLException e) {
+            throw new RuntimeException("Falha ao apagar database", e );
         }
     }
 
