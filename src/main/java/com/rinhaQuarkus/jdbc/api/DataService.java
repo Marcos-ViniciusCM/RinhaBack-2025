@@ -7,6 +7,8 @@ import jakarta.inject.Inject;
 
 import java.sql.*;
 import java.time.Instant;
+import java.util.List;
+import java.util.Queue;
 
 @ApplicationScoped
 public class DataService {
@@ -89,6 +91,31 @@ public class DataService {
             //conn.commit();
         } catch (SQLException e) {
             throw new RuntimeException("Falha ao inserir pagamento dados pay"+ payment.toString(), e );
+        }
+    }
+
+    public void inserirVariosPayment(Queue<PaymentRequest> payments) {
+
+
+        String sql = "INSERT INTO payments(correlationId, amount, processor, requested_at) VALUES (?, ?, ?, ?)";
+        //System.out.println(" Url Conection: " + dataSource.getConfiguration().connectionPoolConfiguration().connectionFactoryConfiguration().jdbcUrl());
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            conn.setAutoCommit(false);
+
+            for(PaymentRequest payment : payments){
+                stmt.setObject(1, payment.getCorrelationId());
+                stmt.setBigDecimal(2, payment.getAmount());
+                stmt.setString(3, payment.getProcessor().name().toLowerCase());
+                stmt.setTimestamp(4, Timestamp.from(payment.getRequest_at()));
+
+            }
+
+
+            stmt.executeUpdate();
+            conn.commit();
+        } catch (SQLException e) {
+            //throw new RuntimeException("Falha ao inserir pagamento dados pay"+ payment.toString(), e );
         }
     }
 

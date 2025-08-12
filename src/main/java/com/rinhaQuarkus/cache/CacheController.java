@@ -84,22 +84,25 @@ public class CacheController {
 
     public void decideWich(PaymentRequest pay){
         ServiceHealthDto health = checkCache("default");
-        System.out.println("Cache: "+health.failing());
+       // System.out.println("Cache: "+health.failing());
        
     if(health.failing()){
         Instant now = Instant.now();
         pay.setRequest_at(now);
         pay.setProcessor(Processor.FALLBACK);
         doPostPaymentsFallback(pay);
-        payIfNotExist(pay);
+
     }else{
         Instant now = Instant.now();
         pay.setRequest_at(now);
         pay.setProcessor(Processor.DEFAULT);
         doPostPaymentsDefault(pay);
-        payIfNotExist(pay);
-    }
 
+    }
+        if(payments.size() >= 50){
+            service.inserirVariosPayment(payments);
+            payments.clear();
+        }
 
     }
 
@@ -111,7 +114,7 @@ public class CacheController {
                 PostPaymentDto dto = new PostPaymentDto(pay.getCorrelationId().toString(),pay.getAmount(),pay.getRequest_at().toString());
 
                 String jsonPayload = objectMapper.writeValueAsString(dto);
-                System.out.println(" PaymentRequest em JSON: default " + jsonPayload);
+                //System.out.println(" PaymentRequest em JSON: default " + jsonPayload);
 
 
 
@@ -128,7 +131,7 @@ public class CacheController {
                 return client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
                         .thenAccept(response -> {
                             if(response.statusCode() >= 200 && response.statusCode() <= 299){
-                               payments.add(pay);
+                               existPayInQueu(pay);
                             };
                         });
 
@@ -149,7 +152,7 @@ public class CacheController {
             PostPaymentDto dto = new PostPaymentDto(pay.getCorrelationId().toString(),pay.getAmount(),pay.getRequest_at().toString());
 
             String jsonPayload = objectMapper.writeValueAsString(dto);
-            System.out.println(" PaymentRequest em JSON: default " + jsonPayload);
+           // System.out.println(" PaymentRequest em JSON: default " + jsonPayload);
 
 
 
@@ -164,7 +167,7 @@ public class CacheController {
             return client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
                     .thenAccept(response ->{
                         if(response.statusCode() >= 200 && response.statusCode() <= 299){
-                            payments.add(pay);
+                            existPayInQueu(pay);
                         };
                     });
 
@@ -182,7 +185,12 @@ public class CacheController {
     }
 
 
-
+public void existPayInQueu(PaymentRequest pay){
+        if(!paymentsId.add(pay.getCorrelationId().toString())){
+            return;
+        }
+        payments.add(pay);
+}
 
 
 
@@ -191,7 +199,7 @@ public synchronized void payIfNotExist(PaymentRequest pay) {
     if (!isNew) return;
 
     try {
-       // service.inserirPayment(pay);
+        service.inserirVariosPayment(payments);
 
     } catch (Exception e) {
         // Em caso de falha, remova para permitir retry
