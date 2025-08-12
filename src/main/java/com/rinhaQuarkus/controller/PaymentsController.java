@@ -36,13 +36,13 @@ public class PaymentsController {
      //  cache.decideWich(pay);
   //  });
 
-       Thread.startVirtualThread(() ->
-       {
+   //    Thread.startVirtualThread(() ->
+    //   {
+    //    cache.decideWich(pay);
+    //   });
         cache.decideWich(pay);
-       });
-        //cache.decideWich(pay);
-        //return Response.accepted().build();
-       return Response.ok().build();
+        return Response.accepted().build();
+      // return Response.ok().build();
     }
 
 

@@ -69,6 +69,8 @@ public class DataService {
 
 
     public void inserirPayment(PaymentRequest payment) {
+        long start = System.currentTimeMillis();
+
         // Validação completa
         if (payment.getCorrelationId() == null ||
                 payment.getAmount() == null ||
@@ -77,10 +79,10 @@ public class DataService {
         }
 
         String sql = "INSERT INTO payments(correlationId, amount, processor, requested_at) VALUES (?, ?, ?, ?)";
-        //System.out.println(" Url Conection: " + dataSource.getConfiguration().connectionPoolConfiguration().connectionFactoryConfiguration().jdbcUrl());
+        System.out.println(" Url Conection: " + dataSource.getConfiguration().connectionPoolConfiguration().connectionFactoryConfiguration().jdbcUrl());
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
-
+                conn.setAutoCommit(false);
 
             stmt.setObject(1, payment.getCorrelationId());
             stmt.setBigDecimal(2, payment.getAmount());
@@ -88,7 +90,10 @@ public class DataService {
             stmt.setTimestamp(4, Timestamp.from(payment.getRequest_at()));
 
             stmt.executeUpdate();
-            //conn.commit();
+            conn.commit();
+            long duration = System.currentTimeMillis() - start;
+            System.out.println("Inserção demorou: " + duration + "ms");
+
         } catch (SQLException e) {
             throw new RuntimeException("Falha ao inserir pagamento dados pay"+ payment.toString(), e );
         }
@@ -108,11 +113,11 @@ public class DataService {
                 stmt.setBigDecimal(2, payment.getAmount());
                 stmt.setString(3, payment.getProcessor().name().toLowerCase());
                 stmt.setTimestamp(4, Timestamp.from(payment.getRequest_at()));
-
+                stmt.addBatch();
             }
 
 
-            stmt.executeUpdate();
+            stmt.executeBatch();
             conn.commit();
         } catch (SQLException e) {
             //throw new RuntimeException("Falha ao inserir pagamento dados pay"+ payment.toString(), e );
