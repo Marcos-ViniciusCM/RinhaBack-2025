@@ -1,16 +1,10 @@
 package com.rinhaQuarkus.jdbc.api;
 
-import com.rinhaQuarkus.DTO.DefaultSumaryDto;
-import com.rinhaQuarkus.DTO.FallbackSumaryDto;
-import com.rinhaQuarkus.DTO.PaymentsSumaryDto;
-import com.rinhaQuarkus.enums.Processor;
 import com.rinhaQuarkus.model.PaymentRequest;
 import io.agroal.api.AgroalDataSource;
-import io.quarkus.agroal.DataSource;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
-import java.math.BigDecimal;
 import java.sql.*;
 import java.time.Instant;
 
@@ -81,7 +75,7 @@ public class DataService {
         }
 
         String sql = "INSERT INTO payments(correlationId, amount, processor, requested_at) VALUES (?, ?, ?, ?)";
-        System.out.println(" Url Conection: " + dataSource.getConfiguration().connectionPoolConfiguration().connectionFactoryConfiguration().jdbcUrl());
+        //System.out.println(" Url Conection: " + dataSource.getConfiguration().connectionPoolConfiguration().connectionFactoryConfiguration().jdbcUrl());
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 

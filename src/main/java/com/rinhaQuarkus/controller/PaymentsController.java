@@ -1,22 +1,15 @@
 package com.rinhaQuarkus.controller;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.rinhaQuarkus.DTO.PaymentsSumaryDto;
 import com.rinhaQuarkus.cache.CacheController;
-import com.rinhaQuarkus.enums.Processor;
 import com.rinhaQuarkus.jdbc.api.DataService;
 import com.rinhaQuarkus.model.PaymentRequest;
-
-import io.quarkus.vertx.http.runtime.devmode.Json.JsonObjectBuilder;
+import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
 import java.time.Instant;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
 
 
 
@@ -32,7 +25,7 @@ public class PaymentsController {
     DataService service;
 
 
-
+    @RunOnVirtualThread
     @POST
     @Path("/payments")
     public Response createPayment(PaymentRequest pay){
@@ -43,18 +36,18 @@ public class PaymentsController {
      //  cache.decideWich(pay);
   //  });
 
-       Thread.startVirtualThread(() ->
-       {
-        cache.decideWich(pay);
-       });
+//       Thread.startVirtualThread(() ->
+//       {
+//        cache.decideWich(pay);
+//       });
         //cache.decideWich(pay);
         //return Response.accepted().build();
-       return Response.ok("post1").build();
+       return Response.ok().build();
     }
 
 
 
-
+    @RunOnVirtualThread
     @GET
     @Path("/payments-summary")
     @Produces("application/json")
@@ -70,6 +63,14 @@ public class PaymentsController {
 
        }
 
+    }
+
+
+    @RunOnVirtualThread
+    @GET
+    @Path("/Therads")
+    public Response Threads() {
+        return Response.ok(Thread.currentThread()).build();
     }
 
 }

@@ -1,27 +1,17 @@
 package com.rinhaQuarkus.cache;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.rinhaQuarkus.DTO.PostPaymentDto;
 import com.rinhaQuarkus.DTO.ServiceHealthDto;
 import com.rinhaQuarkus.enums.Processor;
 import com.rinhaQuarkus.jdbc.api.DataService;
 import com.rinhaQuarkus.model.PaymentRequest;
-
 import io.quarkus.scheduler.Scheduled;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
-import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.client.methods.HttpPost;
-import org.apache.http.entity.ContentType;
-import org.apache.http.entity.StringEntity;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
-import org.apache.http.util.EntityUtils;
-
 import java.io.IOException;
 import java.net.URI;
-import java.net.URL;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -45,7 +35,7 @@ public class CacheController {
 
     private final Set<String> paymentsId = ConcurrentHashMap.newKeySet();
 
-    private final HttpClient client = HttpClient.newHttpClient();
+    private static final HttpClient client = HttpClient.newHttpClient();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Inject
@@ -67,17 +57,7 @@ public class CacheController {
         return fresh;
     }
 
-    @Scheduled(every = "5s")
-    public void updateCache(){
-        try{
-            ServiceHealthDto fresh = callHeathCheck();
-            cache.put("default", new CacheHealth(fresh, Instant.now().plusSeconds(5)));
 
-        }catch(Exception e){
-            System.err.println("Erro ao atualizar cache: " + e.getMessage());
-            e.printStackTrace();
-        }
-    }
 
     private ServiceHealthDto callHeathCheck(){
         try{
@@ -90,7 +70,7 @@ public class CacheController {
 
                     HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
-                if (response.statusCode() > 200 && response.statusCode()  < 299){
+                if (response.statusCode() >= 200 && response.statusCode()  <= 299){
                     String json = response.body();
                     return objectMapper.readValue(json, ServiceHealthDto.class);
                 }
@@ -103,37 +83,24 @@ public class CacheController {
     }
 
     public void decideWich(PaymentRequest pay){
-        //ServiceHealthDto health = checkCache("default");
-        ServiceHealthDto health = cache.get("default").getData();
-
+        ServiceHealthDto health = checkCache("default");
+        System.out.println("Cache: "+health.failing());
        
     if(health.failing()){
         Instant now = Instant.now();
         pay.setRequest_at(now);
         pay.setProcessor(Processor.FALLBACK);
         doPostPaymentsFallback(pay);
-        //payIfNotExist(pay);
+        payIfNotExist(pay);
     }else{
         Instant now = Instant.now();
         pay.setRequest_at(now);
         pay.setProcessor(Processor.DEFAULT);
-        doPostPaymentsDefault( pay);
-       // payIfNotExist(pay);
+        doPostPaymentsDefault(pay);
+        payIfNotExist(pay);
     }
 
-       
-    
-      
-      //  pay.setProcessor(Processor.DEFAULT);
-      //  Instant now = Instant.now();
-      //  pay.setRequest_at(now);
-      //  doPostPayments( pay, "default");
-   
 
-//        boolean sucess = doPostPayments(pay,processor);
-//        if(sucess){
-//            service.inserirPayment(pay);
-//        }
     }
 
 
@@ -141,12 +108,11 @@ public class CacheController {
 
         String url = "http://payment-processor-default:8080/payments";
             try {
-                    String jsonPayload = "{"
-            + "\"correlationId\":\"" + pay.getCorrelationId() + "\","
-            + "\"amount\":" + pay.getAmount() + ","
-            + "\"requestedAt\":\"" + pay.getRequest_at() + "\""
-            + "}";
-             System.out.println(" PaymentRequest em JSON: " + jsonPayload);
+                PostPaymentDto dto = new PostPaymentDto(pay.getCorrelationId().toString(),pay.getAmount(),pay.getRequest_at().toString());
+
+                String jsonPayload = objectMapper.writeValueAsString(dto);
+                System.out.println(" PaymentRequest em JSON: default " + jsonPayload);
+
 
 
 
@@ -162,12 +128,12 @@ public class CacheController {
                 return client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
                         .thenAccept(response -> {
                             if(response.statusCode() >= 200 && response.statusCode() <= 299){
-                               payIfNotExist(pay);
+                               payments.add(pay);
                             };
                         });
 
-              
-               
+
+
             } catch (Exception e) {
                 CompletableFuture<Void> failedFuture = new CompletableFuture<>();
                 failedFuture.completeExceptionally(e);
@@ -180,12 +146,10 @@ public class CacheController {
 
         String url = "http://payment-processor-fallback:8080/payments";
         try {
-            String jsonPayload = "{"
-                    + "\"correlationId\":\"" + pay.getCorrelationId() + "\","
-                    + "\"amount\":" + pay.getAmount() + ","
-                    + "\"requestedAt\":\"" + pay.getRequest_at() + "\""
-                    + "}";
-            System.out.println(" PaymentRequest em JSON: " + jsonPayload);
+            PostPaymentDto dto = new PostPaymentDto(pay.getCorrelationId().toString(),pay.getAmount(),pay.getRequest_at().toString());
+
+            String jsonPayload = objectMapper.writeValueAsString(dto);
+            System.out.println(" PaymentRequest em JSON: default " + jsonPayload);
 
 
 
@@ -200,7 +164,7 @@ public class CacheController {
             return client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
                     .thenAccept(response ->{
                         if(response.statusCode() >= 200 && response.statusCode() <= 299){
-                            payIfNotExist(pay);
+                            payments.add(pay);
                         };
                     });
 
@@ -218,38 +182,6 @@ public class CacheController {
     }
 
 
-    private void doPostPaymentsArray(String payments){
-
-            while(!this.payments.isEmpty()){
-              
-
-            try {
-                  PaymentRequest pay = this.payments.poll();
-
-                pay.decideProcessor(payments);
-                 String url = "http://payment-processor-" + payments + ":8080/payments";
-           String jsonPayload = objectMapper.writeValueAsString(pay);
-                HttpClient client = HttpClient.newHttpClient();
-
-                
-            HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(url))
-            .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
-            .header("Content-Type", "application/json")
-            .build();
-                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() >= 200 && response.statusCode() < 300) {
-                
-        }
-
-            } catch (Exception e) {
-
-            }
-           
-    }
-           
-        
-}
 
 
 
@@ -259,7 +191,7 @@ public synchronized void payIfNotExist(PaymentRequest pay) {
     if (!isNew) return;
 
     try {
-        service.inserirPayment(pay);
+       // service.inserirPayment(pay);
 
     } catch (Exception e) {
         // Em caso de falha, remova para permitir retry

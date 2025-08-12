@@ -9,7 +9,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
-@Path("/purge-payments")
+@Path("/purge-paymentss")
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
 public class Purge {
@@ -19,7 +19,7 @@ public class Purge {
 
     @POST
     public Response purgeDatabase(){
-        //service.truncarPayment();
-    return Response.ok().build();
+        service.truncarPayment();
+    return Response.ok("purge").build();
     }
 }

@@ -16,10 +16,11 @@ services:
       resources:
         limits:
           cpus: "0.15"
-          memory: "40mb"
+          memory: "20mb"
   api01:
     image: pedra0x910/payment-quarkus:latest
     container_name: api01
+    user: root
     networks:
       - backend
       - payment-processor
@@ -29,16 +30,20 @@ services:
       DB_HOST: jdbc:postgresql://postgres:5432/rinha
       DEFAULT_URL: http://payment-processor-default:8080
       FALLBACK_URL: http://payment-processor-fallback:8080
+      JAVA_OPTIONS: "-Xlog:gc*,heap+usage=debug:stdout"
+    volumes:
+        - ./logs/api01:/tmp
     depends_on:
       - postgres
-#    deploy:
-#      resources:
-#        limits:
-#          cpus: "0.55"
-#          memory: "120MB"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.55"
+          memory: "140MB"
   api02:
     image: pedra0x910/payment-quarkus:latest
     container_name: api02
+    user: root
     networks:
       - backend
       - payment-processor
@@ -48,13 +53,16 @@ services:
       DB_HOST: jdbc:postgresql://postgres:5432/rinha
       DEFAULT_URL: http://payment-processor-default:8080
       FALLBACK_URL: http://payment-processor-fallback:8080
+      JAVA_OPTIONS: "-Xlog:gc*,heap+usage=debug:stdout"
+    volumes:
+        - ./logs/api01:/tmp
     depends_on:
       - postgres
-#    deploy:
-#      resources:
-#        limits:
-#          cpus: "0.7"
-#          memory: "120MB"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.55"
+          memory: "140MB"
 
   postgres:
     image: postgres:16
@@ -72,11 +80,16 @@ services:
       - ./src/main/resources/db/migration/V1__create_paymentRequest_table.sql:/docker-entrypoint-initdb.d/V1__create_paymentRequest_table.sql
       - ./postgresql.conf:/etc/postgresql/postgresql.conf
     command: postgres -c config_file=/etc/postgresql/postgresql.conf
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U rinha" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     deploy:
       resources:
         limits:
-          cpus: "0.7"
-          memory: "120MB"
+          cpus: "0.25"
+          memory: "50MB"
 
 
 networks:
