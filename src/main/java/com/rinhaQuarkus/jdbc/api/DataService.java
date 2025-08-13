@@ -18,7 +18,8 @@ public class DataService {
 
 
     public String pegarPayments(Instant from , Instant to ) {
-
+        long start = System.currentTimeMillis();
+        Instant now = Instant.now();
         String sql = """
                 SELECT
                 COUNT(*) FILTER (WHERE processor = 'default')  AS total_default,
@@ -57,6 +58,8 @@ public class DataService {
                             rs.getBigDecimal("amount_fallback").toPlainString()
                     );
                 }
+            long duration = System.currentTimeMillis() - start;
+            System.out.println("Banco demou pra trazer o get: " + duration + "ms");
             }
 
 
@@ -65,6 +68,21 @@ public class DataService {
             throw new RuntimeException(e);
         }
         return "{}";
+    }
+
+
+    public boolean verificarDuplicada(PaymentRequest pay){
+        String sql = "SELECT 1 FROM payments WHERE correlationId = ? LIMIT 1";
+        try(Connection conn = dataSource.getConnection();
+        PreparedStatement statement = conn.prepareStatement(sql)){
+            statement.setObject(1, pay.getCorrelationId());
+            try(ResultSet rs = statement.executeQuery()){
+               return rs.next();
+            }
+        }catch (Exception e) {
+          
+        }
+        return false;
     }
 
 
@@ -79,7 +97,7 @@ public class DataService {
         }
 
         String sql = "INSERT INTO payments(correlationId, amount, processor, requested_at) VALUES (?, ?, ?, ?)";
-        System.out.println(" Url Conection: " + dataSource.getConfiguration().connectionPoolConfiguration().connectionFactoryConfiguration().jdbcUrl());
+       // System.out.println(" Url Conection: " + dataSource.getConfiguration().connectionPoolConfiguration().connectionFactoryConfiguration().jdbcUrl());
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
                 conn.setAutoCommit(false);

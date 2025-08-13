@@ -24,6 +24,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.Semaphore;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
@@ -37,10 +38,11 @@ public class CacheController {
 
     final Queue<PaymentRequest> payments = new ConcurrentLinkedQueue<>();
 
-    private final Set<String> paymentsId = ConcurrentHashMap.newKeySet();
 
     private static final HttpClient client = HttpClient.newHttpClient();
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+
 
     @Inject
     @ConfigProperty(name = "payment.processor.default.url")
@@ -54,7 +56,7 @@ public class CacheController {
     DataService service;
 
   
-
+    private final Semaphore semaphore = new Semaphore(6);
 
 
     private ServiceHealthDto checkCache(String key){
@@ -94,13 +96,24 @@ public class CacheController {
     }
 
     public void decideWich(PaymentRequest pay){
-        //ServiceHealthDto health = checkCache("default");
-       // System.out.println("Cache: "+health.failing());
+
        
+        boolean sucess;
+        ServiceHealthDto health = checkCache("default");
+        System.out.println("Cache: "+health.minResponseTime());
         long start = System.currentTimeMillis();
         Instant now = Instant.now();
+       
         pay.setRequest_at(now);
-        pay.setProcessor(Processor.DEFAULT);
+        pay.setProcessor(Processor.FALLBACK);
+        sucess = doPostPaymentsDefaultTeste(pay, false);
+            
+       
+        
+        
+        
+       
+        
       //  doPostPaymentsDefault(pay, false).thenAccept(sucess ->{
        //     if(sucess){
        //         service.inserirPayment(pay);
@@ -109,15 +122,30 @@ public class CacheController {
        //     }
        // });
 
-        boolean sucess = doPostPaymentsDefaultTeste(pay, false);
 
+        System.out.println("Sucess "+sucess);
         if(sucess){
-            service.inserirPayment(pay);
-            long duration = System.currentTimeMillis() - start;
-            System.out.println("Requisição levou: " + duration + "ms");
+            try{
+            semaphore.acquire();
+           // boolean existe = service.verificarDuplicada(pay);
+           // if(existe) return;
+
+                service.inserirPayment(pay);
+                long duration = System.currentTimeMillis() - start;
+                System.out.println("Requisição levou: " + duration + "ms");
+                System.out.println("devia ser verdade "+sucess);
+                //System.out.println("existe payment com esse id sucess "+sucess);
+            }catch(InterruptedException e){
+
+            }finally{
+                 long duration2 = System.currentTimeMillis() - start;
+                 System.out.println("Liberou a thread em: " + duration2 + "ms");
+                semaphore.release();
+            }
+           
 
         }else{
-            System.out.println("Erro");
+            System.out.println("Erro fazer requisição");
         }
         
     
@@ -125,25 +153,26 @@ public class CacheController {
     }
 
 
-     public boolean doPostPaymentsDefaultTeste(PaymentRequest pay , boolean fallback){
+     public  boolean doPostPaymentsDefaultTeste(PaymentRequest pay , boolean fallback){
+         long start = System.currentTimeMillis();
+         String url;
+                if(fallback){
+                    url = paymentProcessorFallbackUrl;
+                }else{
+                    url = paymentProcessorDefaultUrl;
+                }
 
-        String url = fallback ? paymentProcessorFallbackUrl : paymentProcessorDefaultUrl;
             try {
-                //PostPaymentDto dto = new PostPaymentDto(pay.getCorrelationId().toString(),pay.getAmount(),pay.getRequest_at().toString());
-                String requestedAtFormatted = pay.getRequest_at()
-    .atOffset(ZoneOffset.UTC)
-    .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
-                  Map<String, Object> payload = Map.of(
-            "correlationId", pay.getCorrelationId().toString(),
-            "amount", pay.getAmount(),
-            "requestedAt", requestedAtFormatted
-        );
+                    String requestedAtFormatted = pay.getRequest_at()
+                        .atOffset(ZoneOffset.UTC)
+                        .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+                    Map<String, Object> payload = Map.of(
+                        "correlationId", pay.getCorrelationId().toString(),
+                        "amount", pay.getAmount(),
+                        "requestedAt", requestedAtFormatted
+                );
                 String jsonPayload = objectMapper.writeValueAsString(payload);
                 //System.out.println(" PaymentRequest em JSON: default " + jsonPayload);
-
-
-
-
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
@@ -154,20 +183,26 @@ public class CacheController {
 
                     int status = response.statusCode();
                     if(status >=200 & status <=299){
+            long duration = System.currentTimeMillis() - start;
+            System.out.println("Do Post Teste demorou: " + duration + "ms");
+            System.out.println("status body: " +status);
                         return true;
+                        
                     }
-                        return false;
+                    
                     
 
 
 
             } catch (Exception e) {
-               
+               return false;
                 
               // throw new RuntimeException("Erro na chamada HTTP do post", e);
             }
+            System.out.println("existe payment com esse id");
             return false;
            
+       
     }
 
 
@@ -260,43 +295,6 @@ public class CacheController {
 
     }
 
-
-public void existPayInQueu(PaymentRequest pay){
-    if(!paymentsId.contains(pay.getCorrelationId().toString())){
-         payments.add(pay);
-    }  
-        paymentsId.add(pay.getCorrelationId().toString());
-      
-}
-
-
-
-public synchronized void payIfNotExist(PaymentRequest pay) {
-    boolean isNew = paymentsId.add(pay.getCorrelationId().toString());
-    if (!isNew) return;
-
-    try {
-        service.inserirVariosPayment(payments);
-
-    } catch (Exception e) {
-        // Em caso de falha, remova para permitir retry
-        paymentsId.remove(pay.getCorrelationId().toString());
-        e.printStackTrace();
-        throw e;
-    }
-}
-
-
-public synchronized void flushPayments(){
-    if(payments.isEmpty()) return;
-
-    Queue<PaymentRequest> toInsert = new ConcurrentLinkedQueue<>();
-    PaymentRequest p;
-    while((p = payments.poll()) != null){
-        toInsert.add(p);
-    }
-    service.inserirVariosPayment(toInsert);
-}
 
 }
 

@@ -25,7 +25,7 @@ public class PaymentsController {
     DataService service;
 
 
-    @RunOnVirtualThread
+    //@RunOnVirtualThread
     @POST
     @Path("/payments")
     public Response createPayment(PaymentRequest pay){
@@ -53,10 +53,15 @@ public class PaymentsController {
     @Produces("application/json")
     public Response getPaymentSumary(@QueryParam(value = "from")Instant from , @QueryParam(value = "to") Instant to){
        try{
-
+         long start = System.currentTimeMillis();
+        Instant now = Instant.now();
        // PaymentsSumaryDto sumary = service.pegarPayments(from,to);
-        return Response.ok(service.pegarPayments(from,to)).build();
-          // return Response.ok("From: " + from.toString() + " To: " + to.toString()).build();
+       long duration = System.currentTimeMillis() - start;
+            
+        
+       return Response.ok(service.pegarPayments(from,to)).build();
+         //System.out.println("Requisição Get demorou: " + duration + "ms");
+       // return Response.ok("From: " + from.toString() + " To: " + to.toString()).build();
        }catch(Exception e){
            System.out.println("erro gerar reusmo");
         throw new WebApplicationException("Erro interno ao gerar o resumo", 500);
