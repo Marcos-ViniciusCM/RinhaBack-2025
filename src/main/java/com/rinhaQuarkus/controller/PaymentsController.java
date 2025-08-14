@@ -10,6 +10,8 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
 import java.time.Instant;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 
 
@@ -24,7 +26,7 @@ public class PaymentsController {
     @Inject
     DataService service;
 
-
+  ExecutorService executor = Executors.newFixedThreadPool(20);
     //@RunOnVirtualThread
     @POST
     @Path("/payments")
@@ -36,11 +38,11 @@ public class PaymentsController {
      //  cache.decideWich(pay);
   //  });
 
-   //    Thread.startVirtualThread(() ->
-    //   {
-    //    cache.decideWich(pay);
-    //   });
+      executor.submit(() -> {
         cache.decideWich(pay);
+    });
+    
+        //cache.decideWich(pay);
         return Response.accepted().build();
       // return Response.ok().build();
     }

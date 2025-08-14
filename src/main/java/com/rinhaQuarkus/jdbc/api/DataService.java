@@ -2,6 +2,7 @@ package com.rinhaQuarkus.jdbc.api;
 
 import com.rinhaQuarkus.model.PaymentRequest;
 import io.agroal.api.AgroalDataSource;
+import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -15,6 +16,34 @@ public class DataService {
 
     @Inject
     AgroalDataSource dataSource;
+
+    @Inject
+    ReactivePgClient client;
+
+
+     public void warmUp() throws SQLException {
+       try( Connection con = dataSource.getConnection();
+           PreparedStatement ps = con.prepareStatement("SELECT processor, COUNT(*) AS totalRequests," +
+                   " SUM(amount) AS totalAmount FROM payments WHERE requested_at BETWEEN ? AND ? GROUP BY processor")){
+           ps.setTimestamp(1, Timestamp.from(Instant.now().minusSeconds(3600)));
+           ps.setTimestamp(2, Timestamp.from(Instant.now()));
+           try (ResultSet rs = ps.executeQuery()) {
+               while (rs.next()) {
+                   // só para iterar e carregar
+                   rs.getString("processor");
+                   rs.getInt("totalRequests");
+                   rs.getBigDecimal("totalAmount");
+               }
+           }
+       }
+    }
+
+     public Uni<Void> inserirPayment(PaymentRequest payment) {
+        String sql = "INSERT INTO payments(correlationId, amount, processor, requested_at) VALUES ($1, $2, $3, $4)";
+        return client.preparedQuery(sql)
+            .execute(Tuple.of(payment.getCorrelationId(), payment.getAmount(), payment.getProcessor().name(), payment.getRequest_at()))
+            .replaceWithVoid();
+    }
 
 
     public String pegarPayments(Instant from , Instant to ) {
@@ -86,7 +115,7 @@ public class DataService {
     }
 
 
-    public void inserirPayment(PaymentRequest payment) {
+    public void inserirPayment2(PaymentRequest payment) {
         long start = System.currentTimeMillis();
 
         // Validação completa
@@ -95,6 +124,10 @@ public class DataService {
                 payment.getProcessor() == null) {
             throw new IllegalArgumentException("Todos os campos são obrigatórios: " + payment);
         }
+
+
+        
+      
 
         String sql = "INSERT INTO payments(correlationId, amount, processor, requested_at) VALUES (?, ?, ?, ?)";
        // System.out.println(" Url Conection: " + dataSource.getConfiguration().connectionPoolConfiguration().connectionFactoryConfiguration().jdbcUrl());

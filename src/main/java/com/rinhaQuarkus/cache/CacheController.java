@@ -15,6 +15,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -24,6 +25,8 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -34,15 +37,15 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 @ApplicationScoped
 public class CacheController {
 
-    private Map<String , CacheHealth> cache = new ConcurrentHashMap<>();
-
-    final Queue<PaymentRequest> payments = new ConcurrentLinkedQueue<>();
+  
 
 
-    private static final HttpClient client = HttpClient.newHttpClient();
+    private static final HttpClient client = HttpClient.newBuilder()
+    .build();
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-
+    Queue<PaymentRequest> queue = new ConcurrentLinkedQueue<>();
 
     @Inject
     @ConfigProperty(name = "payment.processor.default.url")
@@ -56,116 +59,64 @@ public class CacheController {
     DataService service;
 
   
-    private final Semaphore semaphore = new Semaphore(6);
-
-
-    private ServiceHealthDto checkCache(String key){
-        CacheHealth cached = cache.get(key);
-        if(cached != null && !cached.isExpired()){
-            return cached.getData();
-        }
-        //ServiceHealthDto fresh = callHeathCheck(key);
-        ServiceHealthDto fresh = callHeathCheck();
-        cache.put(key, new CacheHealth(fresh , Instant.now().plusSeconds(5)));
-        return fresh;
-    }
+    private final Semaphore semaphore = new Semaphore(20);
 
 
 
-    private ServiceHealthDto callHeathCheck(){
-        try{
-                String url = ( "http://payment-processor-default:8080/payments/service-health");
 
-                HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .GET()
-                    .build();
+   
 
-                    HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-
-                if (response.statusCode() >= 200 && response.statusCode()  <= 299){
-                    String json = response.body();
-                    return objectMapper.readValue(json, ServiceHealthDto.class);
-                }
-
-                       
-            }catch(IOException | InterruptedException e){
-                throw new RuntimeException("Erro na chamada HTTP", e);
-            }
-        return new ServiceHealthDto(true,1000);
-    }
+   
 
     public void decideWich(PaymentRequest pay){
-
-       
-        boolean sucess;
-        ServiceHealthDto health = checkCache("default");
-        System.out.println("Cache: "+health.minResponseTime());
         long start = System.currentTimeMillis();
-        Instant now = Instant.now();
-       
-        pay.setRequest_at(now);
-        pay.setProcessor(Processor.FALLBACK);
-        sucess = doPostPaymentsDefaultTeste(pay, false);
+        boolean sucess;
+        try{
+            semaphore.acquire();    
+            Instant now = Instant.now();
+            pay.setRequest_at(now);
             
-       
-        
-        
-        
-       
-        
-      //  doPostPaymentsDefault(pay, false).thenAccept(sucess ->{
-       //     if(sucess){
-       //         service.inserirPayment(pay);
-       //     }else{
-       //         System.out.println("erro na hora de ");
-       //     }
-       // });
-
-
-        System.out.println("Sucess "+sucess);
-        if(sucess){
-            try{
-            semaphore.acquire();
-           // boolean existe = service.verificarDuplicada(pay);
-           // if(existe) return;
-
+            sucess = doPostPaymentsDefaultTeste(pay, false);
+            long duration = System.currentTimeMillis() - start;
+            if(sucess){
+                pay.setProcessor(Processor.DEFAULT);
                 service.inserirPayment(pay);
-                long duration = System.currentTimeMillis() - start;
-                System.out.println("Requisição levou: " + duration + "ms");
-                System.out.println("devia ser verdade "+sucess);
-                //System.out.println("existe payment com esse id sucess "+sucess);
-            }catch(InterruptedException e){
-
-            }finally{
-                 long duration2 = System.currentTimeMillis() - start;
-                 System.out.println("Liberou a thread em: " + duration2 + "ms");
-                semaphore.release();
-            }
+            } 
+            System.out.println("Requisição levou Default: " + duration + "ms");
+        }catch(Exception e1){
+            System.out.println("Estamos no catch aeeeeee: ");
            
-
-        }else{
-            System.out.println("Erro fazer requisição");
+            sucess =doPostPaymentsDefaultTeste(pay, true);
+             if(sucess){
+                 pay.setProcessor(Processor.FALLBACK);
+                 service.inserirPayment(pay);
+             } 
+            long duration = System.currentTimeMillis() - start;
+            System.out.println("Fizemos um fallback: "+ duration +"ms");
+             
+        }finally{
+            long duration2 = System.currentTimeMillis() - start;
+            System.out.println("Liberou a thread em: " + duration2 + "ms");
+            semaphore.release();
         }
-        
-    
+
+
 
     }
+
+
+   
 
 
      public  boolean doPostPaymentsDefaultTeste(PaymentRequest pay , boolean fallback){
          long start = System.currentTimeMillis();
-         String url;
-                if(fallback){
-                    url = paymentProcessorFallbackUrl;
-                }else{
-                    url = paymentProcessorDefaultUrl;
-                }
+         String url = fallback ? paymentProcessorFallbackUrl : paymentProcessorDefaultUrl;  
 
             try {
                     String requestedAtFormatted = pay.getRequest_at()
                         .atOffset(ZoneOffset.UTC)
                         .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+
                     Map<String, Object> payload = Map.of(
                         "correlationId", pay.getCorrelationId().toString(),
                         "amount", pay.getAmount(),
@@ -175,6 +126,7 @@ public class CacheController {
                 //System.out.println(" PaymentRequest em JSON: default " + jsonPayload);
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
+                    .timeout(Duration.ofMillis(800))
                     .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
                     .header("Content-Type", "application/json")
                     .build();
@@ -186,23 +138,15 @@ public class CacheController {
             long duration = System.currentTimeMillis() - start;
             System.out.println("Do Post Teste demorou: " + duration + "ms");
             System.out.println("status body: " +status);
-                        return true;
+            service.inserirPayment(pay);
+                       return true;
                         
                     }
-                    
-                    
-
-
-
-            } catch (Exception e) {
-               return false;
-                
+            } catch (Exception e) { 
+                return false;
               // throw new RuntimeException("Erro na chamada HTTP do post", e);
-            }
-            System.out.println("existe payment com esse id");
-            return false;
-           
-       
+            }  
+       return false;
     }
 
 
@@ -257,43 +201,7 @@ public class CacheController {
            
     }
 
-    public CompletableFuture<Void> doPostPaymentsFallback(PaymentRequest pay){
-
-        String url = "http://payment-processor-fallback:8080/payments";
-        try {
-            PostPaymentDto dto = new PostPaymentDto(pay.getCorrelationId().toString(),pay.getAmount(),pay.getRequest_at().toString());
-
-            String jsonPayload = objectMapper.writeValueAsString(dto);
-           // System.out.println(" PaymentRequest em JSON: default " + jsonPayload);
-
-
-
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
-                    .header("Content-Type", "application/json")
-                    .build();
-        
-            return client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
-                    .thenAccept(response ->{
-                        if(response.statusCode() >= 200 && response.statusCode() <= 299){
-                            //existPayInQueu(pay);
-                            //service.inserirPayment(pay);
-                        };
-                    });
-
-
-
-        } catch (Exception e) {
-            CompletableFuture<Void> failedFuture = new CompletableFuture<>();
-            failedFuture.completeExceptionally(e);
-            return failedFuture;
-           // throw new RuntimeException("Erro na chamada HTTP do post fallbakc", e);
-
-        }
-
-
-    }
+    
 
 
 }
