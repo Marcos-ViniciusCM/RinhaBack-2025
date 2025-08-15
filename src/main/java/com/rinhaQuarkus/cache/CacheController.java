@@ -4,9 +4,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rinhaQuarkus.DTO.PostPaymentDto;
 import com.rinhaQuarkus.DTO.ServiceHealthDto;
 import com.rinhaQuarkus.enums.Processor;
+import com.rinhaQuarkus.jdbc.api.DataRepository;
 import com.rinhaQuarkus.jdbc.api.DataService;
 import com.rinhaQuarkus.model.PaymentRequest;
-import io.quarkus.scheduler.Scheduled;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -58,51 +58,73 @@ public class CacheController {
     @Inject
     DataService service;
 
+    @Inject
+    DataRepository repository;
+
   
-    private final Semaphore semaphore = new Semaphore(20);
+    //private final Semaphore semaphore = new Semaphore(20);
 
 
 
 
-   
 
-   
-
-    public void decideWich(PaymentRequest pay){
+    public boolean decideWich(PaymentRequest pay){
+        pay.setRequest_at(Instant.now());
         long start = System.currentTimeMillis();
-        boolean sucess;
-        try{
-            semaphore.acquire();    
-            Instant now = Instant.now();
-            pay.setRequest_at(now);
-            
-            sucess = doPostPaymentsDefaultTeste(pay, false);
-            long duration = System.currentTimeMillis() - start;
-            if(sucess){
-                pay.setProcessor(Processor.DEFAULT);
-                service.inserirPayment(pay);
-            } 
-            System.out.println("Requisição levou Default: " + duration + "ms");
-        }catch(Exception e1){
-            System.out.println("Estamos no catch aeeeeee: ");
-           
-            sucess =doPostPaymentsDefaultTeste(pay, true);
-             if(sucess){
-                 pay.setProcessor(Processor.FALLBACK);
-                 service.inserirPayment(pay);
-             } 
-            long duration = System.currentTimeMillis() - start;
-            System.out.println("Fizemos um fallback: "+ duration +"ms");
-             
-        }finally{
-            long duration2 = System.currentTimeMillis() - start;
-            System.out.println("Liberou a thread em: " + duration2 + "ms");
-            semaphore.release();
+        boolean primaryResult = doPostPaymentsDefaultTeste(pay,false);
+        if(primaryResult){
+            pay.setProcessor(Processor.DEFAULT);
+            repository.save(pay);
+            return true;
+        }
+        boolean fallbackResult = doPostPaymentsDefaultTeste(pay,true);
+        if(fallbackResult){
+            pay.setProcessor(Processor.FALLBACK);
+            repository.save(pay);
+            return  true;
+        }else {
+            System.out.println("Nao foi salvo em nenhum");
+            return false;
         }
 
-
-
     }
+   
+
+//    public void decideWich(PaymentRequest pay){
+//        long start = System.currentTimeMillis();
+//        boolean sucess;
+//        try{
+//            semaphore.acquire();
+//            Instant now = Instant.now();
+//            pay.setRequest_at(now);
+//
+//            sucess = doPostPaymentsDefaultTeste(pay, false);
+//            long duration = System.currentTimeMillis() - start;
+//            if(sucess){
+//                pay.setProcessor(Processor.DEFAULT);
+//                service.inserirPayment(pay);
+//            }
+//            System.out.println("Requisição levou Default: " + duration + "ms");
+//        }catch(Exception e1){
+//            System.out.println("Estamos no catch aeeeeee: ");
+//
+//            sucess =doPostPaymentsDefaultTeste(pay, true);
+//             if(sucess){
+//                 pay.setProcessor(Processor.FALLBACK);
+//                 service.inserirPayment(pay);
+//             }
+//            long duration = System.currentTimeMillis() - start;
+//            System.out.println("Fizemos um fallback: "+ duration +"ms");
+//
+//        }finally{
+//            long duration2 = System.currentTimeMillis() - start;
+//            System.out.println("Liberou a thread em: " + duration2 + "ms");
+//            semaphore.release();
+//        }
+//
+//
+//
+//    }
 
 
    
@@ -123,7 +145,7 @@ public class CacheController {
                         "requestedAt", requestedAtFormatted
                 );
                 String jsonPayload = objectMapper.writeValueAsString(payload);
-                //System.out.println(" PaymentRequest em JSON: default " + jsonPayload);
+                System.out.println(" PaymentRequest em JSON: default " + jsonPayload);
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .timeout(Duration.ofMillis(800))
@@ -138,13 +160,13 @@ public class CacheController {
             long duration = System.currentTimeMillis() - start;
             System.out.println("Do Post Teste demorou: " + duration + "ms");
             System.out.println("status body: " +status);
-            service.inserirPayment(pay);
+
                        return true;
                         
                     }
             } catch (Exception e) { 
-                return false;
-              // throw new RuntimeException("Erro na chamada HTTP do post", e);
+                //return false;
+              throw new RuntimeException("Erro na chamada HTTP do post", e);
             }  
        return false;
     }

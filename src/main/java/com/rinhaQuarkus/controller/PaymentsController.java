@@ -1,6 +1,7 @@
 package com.rinhaQuarkus.controller;
 
 import com.rinhaQuarkus.cache.CacheController;
+import com.rinhaQuarkus.jdbc.api.DataRepository;
 import com.rinhaQuarkus.jdbc.api.DataService;
 import com.rinhaQuarkus.model.PaymentRequest;
 import io.smallrye.common.annotation.RunOnVirtualThread;
@@ -26,6 +27,9 @@ public class PaymentsController {
     @Inject
     DataService service;
 
+    @Inject
+    DataRepository repository;
+
   ExecutorService executor = Executors.newFixedThreadPool(20);
     //@RunOnVirtualThread
     @POST
@@ -38,18 +42,24 @@ public class PaymentsController {
      //  cache.decideWich(pay);
   //  });
 
-      executor.submit(() -> {
-        cache.decideWich(pay);
-    });
-    
-        //cache.decideWich(pay);
-        return Response.accepted().build();
-      // return Response.ok().build();
+//      executor.submit(() -> {
+//        cache.decideWich(pay);
+//    });
+        boolean sucess = cache.decideWich(pay);
+
+        if(sucess){
+            return Response.accepted().build();
+        }
+        return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                .entity("Payment processing failed")
+                .build();
+
+
     }
 
 
 
-    @RunOnVirtualThread
+    //@RunOnVirtualThread
     @GET
     @Path("/payments-summary")
     @Produces("application/json")
@@ -59,9 +69,9 @@ public class PaymentsController {
         Instant now = Instant.now();
        // PaymentsSumaryDto sumary = service.pegarPayments(from,to);
        long duration = System.currentTimeMillis() - start;
-            
-        
-       return Response.ok(service.pegarPayments(from,to)).build();
+
+           System.out.println("Requisição JSON: " + repository.sumAmount(from,to));
+       return Response.ok(repository.sumAmount(from,to)).build();
          //System.out.println("Requisição Get demorou: " + duration + "ms");
        // return Response.ok("From: " + from.toString() + " To: " + to.toString()).build();
        }catch(Exception e){

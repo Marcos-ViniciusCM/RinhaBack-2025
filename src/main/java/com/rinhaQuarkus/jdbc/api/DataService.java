@@ -17,8 +17,6 @@ public class DataService {
     @Inject
     AgroalDataSource dataSource;
 
-    @Inject
-    ReactivePgClient client;
 
 
      public void warmUp() throws SQLException {
@@ -38,12 +36,6 @@ public class DataService {
        }
     }
 
-     public Uni<Void> inserirPayment(PaymentRequest payment) {
-        String sql = "INSERT INTO payments(correlationId, amount, processor, requested_at) VALUES ($1, $2, $3, $4)";
-        return client.preparedQuery(sql)
-            .execute(Tuple.of(payment.getCorrelationId(), payment.getAmount(), payment.getProcessor().name(), payment.getRequest_at()))
-            .replaceWithVoid();
-    }
 
 
     public String pegarPayments(Instant from , Instant to ) {
