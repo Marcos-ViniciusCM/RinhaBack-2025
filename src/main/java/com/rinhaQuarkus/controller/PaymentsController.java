@@ -1,7 +1,6 @@
 package com.rinhaQuarkus.controller;
 
 import com.rinhaQuarkus.cache.CacheController;
-import com.rinhaQuarkus.jdbc.api.DataRepository;
 import com.rinhaQuarkus.jdbc.api.DataService;
 import com.rinhaQuarkus.model.PaymentRequest;
 import io.smallrye.common.annotation.RunOnVirtualThread;
@@ -27,24 +26,15 @@ public class PaymentsController {
     @Inject
     DataService service;
 
-    @Inject
-    DataRepository repository;
 
-  ExecutorService executor = Executors.newFixedThreadPool(20);
+
+
     //@RunOnVirtualThread
     @POST
     @Path("/payments")
     public Response createPayment(PaymentRequest pay){
 
-        //cache.decideWich(pay);
-     //  CompletableFuture.runAsync(() -> {
-      // pay.setProcessor(Processor.FALLBACK);
-     //  cache.decideWich(pay);
-  //  });
-
-//      executor.submit(() -> {
-//        cache.decideWich(pay);
-//    });
+     
         boolean sucess = cache.decideWich(pay);
 
         if(sucess){
@@ -70,10 +60,9 @@ public class PaymentsController {
        // PaymentsSumaryDto sumary = service.pegarPayments(from,to);
        long duration = System.currentTimeMillis() - start;
 
-           System.out.println("Requisição JSON: " + repository.sumAmount(from,to));
-       return Response.ok(repository.sumAmount(from,to)).build();
-         //System.out.println("Requisição Get demorou: " + duration + "ms");
-       // return Response.ok("From: " + from.toString() + " To: " + to.toString()).build();
+           //System.out.println("Requisição JSON: " + repository.sumAmount(from,to));
+       return Response.ok(service.pegarPayments(from, to)).build();
+        
        }catch(Exception e){
            System.out.println("erro gerar reusmo");
         throw new WebApplicationException("Erro interno ao gerar o resumo", 500);

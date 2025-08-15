@@ -107,22 +107,19 @@ public class DataService {
     }
 
 
-    public void inserirPayment2(PaymentRequest payment) {
+    public boolean inserirPayment(PaymentRequest payment) {
         long start = System.currentTimeMillis();
+         System.out.println("Aqui estamos com o id:"+payment.getCorrelationId());
+          System.out.println("PROCESSOR:"+payment.getProcessor());
+        if(verificarDuplicada(payment)) return false;
 
-        // Validação completa
-        if (payment.getCorrelationId() == null ||
-                payment.getAmount() == null ||
-                payment.getProcessor() == null) {
-            throw new IllegalArgumentException("Todos os campos são obrigatórios: " + payment);
-        }
+        String sql = """
+                 INSERT INTO payments(correlationId, amount, processor, requested_at) 
+        VALUES (?, ?, ?, ?)
+                """;
+       
 
-
-        
-      
-
-        String sql = "INSERT INTO payments(correlationId, amount, processor, requested_at) VALUES (?, ?, ?, ?)";
-       // System.out.println(" Url Conection: " + dataSource.getConfiguration().connectionPoolConfiguration().connectionFactoryConfiguration().jdbcUrl());
+        System.out.println(" Url Conection: " + dataSource.getConfiguration().connectionPoolConfiguration().connectionFactoryConfiguration().jdbcUrl());
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
                 conn.setAutoCommit(false);
@@ -132,14 +129,16 @@ public class DataService {
             stmt.setString(3, payment.getProcessor().name().toLowerCase());
             stmt.setTimestamp(4, Timestamp.from(payment.getRequest_at()));
 
-            stmt.executeUpdate();
+             int affectedRows = stmt.executeUpdate();
             conn.commit();
             long duration = System.currentTimeMillis() - start;
             System.out.println("Inserção demorou: " + duration + "ms");
-
+            System.out.println("Aqui estamos com o trueee:"+payment.getCorrelationId());
+            return affectedRows > 0;    
         } catch (SQLException e) {
             throw new RuntimeException("Falha ao inserir pagamento dados pay"+ payment.toString(), e );
         }
+       
     }
 
     public void inserirVariosPayment(Queue<PaymentRequest> payments) {

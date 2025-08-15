@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rinhaQuarkus.DTO.PostPaymentDto;
 import com.rinhaQuarkus.DTO.ServiceHealthDto;
 import com.rinhaQuarkus.enums.Processor;
-import com.rinhaQuarkus.jdbc.api.DataRepository;
 import com.rinhaQuarkus.jdbc.api.DataService;
 import com.rinhaQuarkus.model.PaymentRequest;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -41,6 +40,7 @@ public class CacheController {
 
 
     private static final HttpClient client = HttpClient.newBuilder()
+    .connectTimeout(Duration.ofMillis(1500))
     .build();
 
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -58,73 +58,62 @@ public class CacheController {
     @Inject
     DataService service;
 
-    @Inject
-    DataRepository repository;
-
-  
-    //private final Semaphore semaphore = new Semaphore(20);
-
-
-
-
-
-    public boolean decideWich(PaymentRequest pay){
-        pay.setRequest_at(Instant.now());
-        long start = System.currentTimeMillis();
-        boolean primaryResult = doPostPaymentsDefaultTeste(pay,false);
-        if(primaryResult){
-            pay.setProcessor(Processor.DEFAULT);
-            repository.save(pay);
-            return true;
-        }
-        boolean fallbackResult = doPostPaymentsDefaultTeste(pay,true);
-        if(fallbackResult){
-            pay.setProcessor(Processor.FALLBACK);
-            repository.save(pay);
-            return  true;
-        }else {
-            System.out.println("Nao foi salvo em nenhum");
-            return false;
-        }
-
-    }
    
 
-//    public void decideWich(PaymentRequest pay){
-//        long start = System.currentTimeMillis();
-//        boolean sucess;
-//        try{
-//            semaphore.acquire();
-//            Instant now = Instant.now();
-//            pay.setRequest_at(now);
-//
-//            sucess = doPostPaymentsDefaultTeste(pay, false);
-//            long duration = System.currentTimeMillis() - start;
-//            if(sucess){
-//                pay.setProcessor(Processor.DEFAULT);
+  
+    private final Semaphore semaphore = new Semaphore(20);
+
+
+
+
+
+    
+ 
+   
+
+    public boolean decideWich(PaymentRequest pay){
+        long start = System.currentTimeMillis();
+        boolean sucess;
+        boolean sucessFall;
+       
+        try{
+            sucess = doPostPaymentsDefaultTeste(pay, false);
+            semaphore.acquire();
+            Instant now = Instant.now();
+            pay.setRequest_at(now);
+            long duration = System.currentTimeMillis() - start;
+            System.out.println("ESTADO SUCESS: " + sucess);
+            if(sucess){
+                pay.setProcessor(Processor.DEFAULT);
+                service.inserirPayment(pay);
+                System.out.println("Inserimos default: "+pay.getCorrelationId());
+                
+                return true;
+            }
+//             sucessFall = doPostPaymentsDefaultTeste(pay, false);
+//             if(sucessFall){
+//                pay.setProcessor(Processor.FALLBACK);
 //                service.inserirPayment(pay);
+//                 System.out.println("Inserimos fallback: "+pay.getCorrelationId());
+//                return true;
 //            }
-//            System.out.println("Requisição levou Default: " + duration + "ms");
-//        }catch(Exception e1){
-//            System.out.println("Estamos no catch aeeeeee: ");
-//
-//            sucess =doPostPaymentsDefaultTeste(pay, true);
-//             if(sucess){
-//                 pay.setProcessor(Processor.FALLBACK);
-//                 service.inserirPayment(pay);
-//             }
-//            long duration = System.currentTimeMillis() - start;
-//            System.out.println("Fizemos um fallback: "+ duration +"ms");
-//
-//        }finally{
-//            long duration2 = System.currentTimeMillis() - start;
-//            System.out.println("Liberou a thread em: " + duration2 + "ms");
-//            semaphore.release();
-//        }
-//
-//
-//
-//    }
+            System.out.println("Requisição levou Default: " + duration + "ms");
+        }catch(Exception e1){
+            System.out.println("Estamos no catch aeeeeee: ");
+
+            sucess =doPostPaymentsDefaultTeste(pay, true);
+            long duration = System.currentTimeMillis() - start;
+            System.out.println("Fizemos um fallback: "+ duration +"ms");
+
+        }finally{
+            long duration2 = System.currentTimeMillis() - start;
+            System.out.println("Liberou a thread em: " + duration2 + "ms");
+            semaphore.release();
+        }
+
+        return false;
+
+    }
 
 
    
@@ -132,7 +121,7 @@ public class CacheController {
 
      public  boolean doPostPaymentsDefaultTeste(PaymentRequest pay , boolean fallback){
          long start = System.currentTimeMillis();
-         String url = fallback ? paymentProcessorFallbackUrl : paymentProcessorDefaultUrl;  
+         String url = fallback ? paymentProcessorFallbackUrl :paymentProcessorDefaultUrl;  
 
             try {
                     String requestedAtFormatted = pay.getRequest_at()
@@ -148,7 +137,6 @@ public class CacheController {
                 System.out.println(" PaymentRequest em JSON: default " + jsonPayload);
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
-                    .timeout(Duration.ofMillis(800))
                     .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
                     .header("Content-Type", "application/json")
                     .build();
@@ -161,14 +149,14 @@ public class CacheController {
             System.out.println("Do Post Teste demorou: " + duration + "ms");
             System.out.println("status body: " +status);
 
-                       return true;
+                       return false;
                         
                     }
             } catch (Exception e) { 
                 //return false;
-              throw new RuntimeException("Erro na chamada HTTP do post", e);
+              //throw new RuntimeException("Erro na chamada HTTP do post", e);
             }  
-       return false;
+            return true;
     }
 
 

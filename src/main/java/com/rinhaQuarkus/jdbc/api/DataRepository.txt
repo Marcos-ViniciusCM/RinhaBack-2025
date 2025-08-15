@@ -1,0 +1,86 @@
+//package com.rinhaQuarkus.jdbc.api;
+//
+//import com.rinhaQuarkus.model.PaymentRequest;
+//import io.quarkus.hibernate.orm.panache.PanacheRepository;
+//import io.quarkus.panache.common.Parameters;
+//import jakarta.enterprise.context.ApplicationScoped;
+//import jakarta.transaction.Transactional;
+//
+//import java.math.BigDecimal;
+//import java.time.Instant;
+//import java.util.Optional;
+//import java.util.UUID;
+
+//@ApplicationScoped
+//public class DataRepository implements PanacheRepository<PaymentRequest> {
+//
+//
+//    public String sumAmount(Instant from , Instant to){
+//
+//
+//        Object[] result = (Object[]) getEntityManager().createNativeQuery("""
+//                SELECT
+//                COUNT(*) FILTER (WHERE processor = 'DEFAULT')  AS total_default,
+//                COALESCE(SUM(amount) FILTER (WHERE processor = 'DEFAULT'), 0) AS amount_default,
+//                COUNT(*) FILTER (WHERE processor = 'FALLBACK') AS total_fallback,
+//                COALESCE(SUM(amount) FILTER (WHERE processor = 'FALLBACK'), 0) AS amount_fallback
+//                FROM payments
+//                WHERE requested_at BETWEEN :from AND :to
+//                """)
+//                .setParameter("from",from)
+//                .setParameter("to",to)
+//                .getSingleResult();
+//
+//        Number totalDefault = (Number) result[0] ;
+//        BigDecimal amountDefault = (BigDecimal) result[1];
+//        Number totalFallback = (Number) result[2] ;
+//        BigDecimal amountFallback = (BigDecimal) result[3];
+//
+//        return String.format("""
+//                {
+//          "default": {
+//            "totalRequests": %d,
+//            "totalAmount": %s
+//          },
+//          "fallback": {
+//            "totalRequests": %d,
+//            "totalAmount": %s
+//          }
+//        }
+//                """,
+//         totalDefault.intValue(),amountDefault
+//        ,totalFallback.intValue() , amountFallback);
+//    }
+//
+//    public Optional<PaymentRequest> findByCorrelationId(UUID correlationId){
+//        return find("correlationId",correlationId).firstResultOptional();
+//    }
+//
+//
+//
+//
+//    @Transactional
+//    public PaymentRequest save(PaymentRequest pay){
+//        long start = System.currentTimeMillis();
+//        Optional<PaymentRequest> existPay = findByCorrelationId(pay.getCorrelationId());
+//
+//        if(existPay.isPresent()){
+//            PaymentRequest newPay = existPay.get();
+//            newPay.setProcessor(pay.getProcessor());
+//            newPay.setAmount(pay.getAmount());
+//            persist(newPay);
+//            long duration = System.currentTimeMillis() - start;
+//            System.out.println("Sve ja existe demorou: "+ duration +"ms");
+//            return newPay;
+//
+//        }else {
+//            persist(pay);
+//            long duration = System.currentTimeMillis() - start;
+//            System.out.println("Sve novo demorou: "+ duration +"ms");
+//            return pay;
+//
+//        }
+//    }
+
+
+//}//

@@ -4,6 +4,8 @@ package com.rinhaQuarkus.model;
 import com.rinhaQuarkus.enums.Processor;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
@@ -11,18 +13,20 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
-@Entity
-@Table  (name = "payments")
+//@Entity
+//@Table  (name = "payments")
 public class PaymentRequest {
-    @Id
+   // @Id
     private UUID correlationId;
 
-    @Column(name = "amount", nullable = false, precision = 19, scale = 2)
+   // @Column(name = "amount", nullable = false, precision = 19, scale = 2)
     private BigDecimal amount;
 
+   // @Enumerated(EnumType.STRING)
+   // @Column(name = "processor")
     private Processor processor;
 
-    @Column(name = "requested_at", nullable = false)
+    //@Column(name = "requested_at", nullable = false)
     private Instant request_at;
 
 
